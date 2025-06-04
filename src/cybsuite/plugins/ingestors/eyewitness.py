@@ -1,13 +1,13 @@
-from cybsuite.cyberdb import BaseIngestor, Metadata
 import csv
 import os
 from pathlib import Path
+
+from cybsuite.cyberdb import BaseIngestor, Metadata
 
 
 class EyewitnessIngestor(BaseIngestor):
     name = "eyewitness"
     extension = ".txt"
-
 
     metadata = Metadata(
         description="Ingest Eyewitness scan results folder containing screenshots and metadata"
@@ -33,7 +33,9 @@ class EyewitnessIngestor(BaseIngestor):
                     "category": row["Category"],
                     "default_creds": row["Default Creds"],
                     "screenshot": row["Screenshot Path"],
-                    "source": row[" Source Path"].strip()  # Note the space in column name
+                    "source": row[
+                        " Source Path"
+                    ].strip(),  # Note the space in column name
                 }
 
                 # Clean up paths to be relative to the folder

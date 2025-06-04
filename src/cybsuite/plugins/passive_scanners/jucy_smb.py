@@ -1,5 +1,6 @@
-from cybsuite.cyberdb import BasePassiveScanner, Metadata
 from pathlib import Path
+
+from cybsuite.cyberdb import BasePassiveScanner, Metadata
 
 JUCY_EXTENSIONS = [
     ".kdb",
@@ -14,40 +15,40 @@ JUCY_EXTENSIONS = [
 ]
 
 SKIP_EXTENSIONS = {
-        ".adml",
-        ".admx",
-        ".md5",
-        ".sha1",
-        ".sha512",
-        ".dsx",  # image
-        ".dll",
-        ".jpg",
-        ".png",
-        ".gif",
-        ".bmp",
-        ".tiff",
-        ".ico",
-        ".webp",
+    ".adml",
+    ".admx",
+    ".md5",
+    ".sha1",
+    ".sha512",
+    ".dsx",  # image
+    ".dll",
+    ".jpg",
+    ".png",
+    ".gif",
+    ".bmp",
+    ".tiff",
+    ".ico",
+    ".webp",
 }
 
 NAMES = {
-        "empty.txt",
-        "password.txt",
-        "conf.php",
-        "backupcodes.txt",
-        "evil_dll.dll",
-        "credential.xml",
-        "mot_de_passe.txt",
-        "mdp.txt",
-        "mdp_administrator.txt",  # FIXME: for later
-        "mdp_admin.txt",
-        "mot_de_passe_admin.txt",
-        "mots_de_passe_chrome.csv",
-        "nouveau_document_texte.txt",
-        "dump.sql",
-        "db.sql",
-        "backup.sql",
-    }
+    "empty.txt",
+    "password.txt",
+    "conf.php",
+    "backupcodes.txt",
+    "evil_dll.dll",
+    "credential.xml",
+    "mot_de_passe.txt",
+    "mdp.txt",
+    "mdp_administrator.txt",  # FIXME: for later
+    "mdp_admin.txt",
+    "mot_de_passe_admin.txt",
+    "mots_de_passe_chrome.csv",
+    "nouveau_document_texte.txt",
+    "dump.sql",
+    "db.sql",
+    "backup.sql",
+}
 
 
 IN_NAME_LOWER = {
@@ -96,27 +97,33 @@ class JucySmbScanner(BasePassiveScanner):
             elif any(name in normalized_filename.name for name in NAMES):
                 file_is_jucy = True
                 rule_name = "NAME-IN"
-                rule_value = next(name for name in NAMES if name in normalized_filename.name)
+                rule_value = next(
+                    name for name in NAMES if name in normalized_filename.name
+                )
             elif any(name in normalized_filename.name for name in IN_NAME_LOWER):
                 file_is_jucy = True
                 rule_name = "NAME-IN-LOWER"
-                rule_value = next(name for name in IN_NAME_LOWER if name in normalized_filename.name)
+                rule_value = next(
+                    name for name in IN_NAME_LOWER if name in normalized_filename.name
+                )
 
             if file_is_jucy:
                 nb_files_jucy += 1
                 # Log to console
-                self.logger.info(f"{rule_name:20} {smb_file.host} {smb_file.share} {smb_file.directory} {smb_file.file}")
+                self.logger.info(
+                    f"{rule_name:20} {smb_file.host} {smb_file.share} {smb_file.directory} {smb_file.file}"
+                )
 
                 # Feed to jucy_search table
-                self.cyberdb.feed("jucy_search",
+                self.cyberdb.feed(
+                    "jucy_search",
                     rule_name=rule_name,
                     rule_value=rule_value,
                     value=f"{smb_file.host} {smb_file.share} {smb_file.directory}/{smb_file.file}",
-                    category="smb_file"
+                    category="smb_file",
                 )
 
             processed_files += 1
-        self.logger.info(f"Found {nb_files_jucy} jucy files out of {processed_files} files")
-
-
-
+        self.logger.info(
+            f"Found {nb_files_jucy} jucy files out of {processed_files} files"
+        )

@@ -1,7 +1,8 @@
-from cybsuite.cyberdb import BaseIngestor, Metadata
 import json
-from functools import cache
 import os
+from functools import cache
+
+from cybsuite.cyberdb import BaseIngestor, Metadata
 
 
 class SmbthingIngestor(BaseIngestor):
@@ -14,7 +15,7 @@ class SmbthingIngestor(BaseIngestor):
 
     @cache
     def _get_host(self, ip):
-        return self.cyberdb.feed("host",ip=ip)[0]
+        return self.cyberdb.feed("host", ip=ip)[0]
 
     def _process_entry(self, data):
         """Process a single SMB entry."""
@@ -24,19 +25,21 @@ class SmbthingIngestor(BaseIngestor):
             "share": data["share"],
             "directory": data["directory"],
             "file": data["filename"],
-            "size": data['size'],
-            "is_directory": bool(data['is_directory'])
+            "size": data["size"],
+            "is_directory": bool(data["is_directory"]),
         }
         try:
             self.cyberdb.feed("smb_file", **metadata)
         except Exception as e:
-            self.logger.error(f"Error feeding smb_file: {e.__class__.__name__} {str(e)}")
+            self.logger.error(
+                f"Error feeding smb_file: {e.__class__.__name__} {str(e)}"
+            )
             self.logger.debug(f"Problematic metadata: {metadata}")
 
     def do_run(self, filepath):
         self.logger.info(f"Processing smbthing data from {filepath}")
         with open(filepath) as f:
-            if filepath.endswith('.json'):
+            if filepath.endswith(".json"):
                 # Handle single JSON file
                 data_list = json.load(f)
                 entries = data_list if isinstance(data_list, list) else [data_list]
