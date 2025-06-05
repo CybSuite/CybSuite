@@ -1,6 +1,7 @@
 """
 TODO: Many sub commands and code are not used. Will be added or removed in future versions!"""
 import sys
+from io import StringIO
 
 import rich
 from cybsuite.cyberdb import CyberDB, pm_formatters
