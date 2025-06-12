@@ -1,21 +1,27 @@
-from datetime import datetime, timezone
-
-from cybsuite.scanners.base_plugin import BasicScanner, Metadata
-
-
-#!/usr/bin/env python3
-
 import argparse
 import hashlib
 import os
-from collections import defaultdict, Counter
-from pathlib import Path
-from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
-from typing import Dict, Tuple, DefaultDict, List
+from collections import Counter, defaultdict
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import DefaultDict, Dict, List, Tuple
+
+from cybsuite.scanners.base_plugin import BasicScanner, Metadata
+from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+)
+
+#!/usr/bin/env python3
+
 
 console = Console()
+
 
 @dataclass
 class SizeRange:
@@ -26,6 +32,7 @@ class SizeRange:
         if next_range_size is None:  # Last range
             return file_size >= self.size
         return self.size <= file_size < next_range_size
+
 
 # Define size ranges relevant for LLM processing
 SIZE_RANGES = [
@@ -43,13 +50,15 @@ SIZE_RANGES = [
     SizeRange("≥ 10MB", 10 * 1024 * 1024),
 ]
 
+
 def human_readable_size(size_in_bytes: int) -> str:
     """Convert bytes to human readable string."""
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
         if size_in_bytes < 1024.0:
             return f"{size_in_bytes:.1f} {unit}"
         size_in_bytes /= 1024.0
     return f"{size_in_bytes:.1f} PB"
+
 
 def calculate_file_hash(filepath: Path, chunk_size: int = 8192) -> str:
     """Calculate SHA-256 hash of a file in chunks to handle large files efficiently."""
@@ -62,6 +71,7 @@ def calculate_file_hash(filepath: Path, chunk_size: int = 8192) -> str:
     except (PermissionError, FileNotFoundError) as e:
         console.print(f"[red]Error processing {filepath}: {str(e)}[/red]")
         return None
+
 
 def find_files(directory: Path) -> List[Path]:
     """Recursively find all files in a directory."""
@@ -76,6 +86,7 @@ def find_files(directory: Path) -> List[Path]:
         console.print(f"[red]Error accessing {directory}: {str(e)}[/red]")
     return files
 
+
 def get_size_category(size: int) -> str:
     """Get the category name for a given file size."""
     for i, range_def in enumerate(SIZE_RANGES):
@@ -84,6 +95,7 @@ def get_size_category(size: int) -> str:
         if range_def.contains(size, next_size):
             return range_def.name
     return "Unknown"
+
 
 class FileAnalysis:
     def __init__(self):
@@ -110,7 +122,7 @@ class FileAnalysis:
             TextColumn("[progress.description]{task.description}"),
             BarColumn(),
             TaskProgressColumn(),
-            console=console
+            console=console,
         ) as progress:
             # Find all files
             count_task = progress.add_task("Finding files...", total=None)
@@ -119,7 +131,9 @@ class FileAnalysis:
             progress.update(count_task, total=self.total_files)
 
             # Analyze files
-            analyze_task = progress.add_task("Analyzing files...", total=self.total_files)
+            analyze_task = progress.add_task(
+                "Analyzing files...", total=self.total_files
+            )
 
             for file_path in files:
                 try:
@@ -168,12 +182,16 @@ class FileAnalysis:
                 self.space_wasted += files[0].stat().st_size * (len(files) - 1)
 
     def display_results(self, top_extensions: int = 10) -> None:
-        console.print("\n[bold green]File Analysis Results (Including Duplicates)[/bold green]")
+        console.print(
+            "\n[bold green]File Analysis Results (Including Duplicates)[/bold green]"
+        )
 
         # Basic statistics
         console.print(f"\n[bold cyan]General Statistics:[/bold cyan]")
         console.print(f"Total files analyzed: {self.total_files:,}")
-        console.print(f"Total size: {human_readable_size(self.total_size)} ({self.total_size:,} bytes)")
+        console.print(
+            f"Total size: {human_readable_size(self.total_size)} ({self.total_size:,} bytes)"
+        )
 
         # Size distribution with cumulative counts and percentages
         console.print(f"\n[bold cyan]Size Distribution:[/bold cyan]")
@@ -194,27 +212,39 @@ class FileAnalysis:
         console.print(f"\n[bold cyan]Duplication Statistics:[/bold cyan]")
         console.print(f"Duplicate files: {self.duplicate_files:,}")
         console.print(f"Duplicate groups: {self.duplicate_groups:,}")
-        console.print(f"Space wasted by duplicates: {human_readable_size(self.space_wasted)}")
+        console.print(
+            f"Space wasted by duplicates: {human_readable_size(self.space_wasted)}"
+        )
 
         # Extension statistics with sizes
-        console.print(f"\n[bold cyan]Top {top_extensions} Extensions (Including Duplicates):[/bold cyan]")
+        console.print(
+            f"\n[bold cyan]Top {top_extensions} Extensions (Including Duplicates):[/bold cyan]"
+        )
         for ext, count in self.extension_counts.most_common(top_extensions):
             size = self.extension_sizes[ext]
             percentage = (count / self.total_files) * 100
-            size_percentage = (size / self.total_size) * 100 if self.total_size > 0 else 0
+            size_percentage = (
+                (size / self.total_size) * 100 if self.total_size > 0 else 0
+            )
             console.print(
                 f"[cyan]{ext}:[/cyan] {count:,} files ({percentage:.1f}%) | "
                 f"Total size: {human_readable_size(size)} ({size_percentage:.1f}% of total size)"
             )
 
         # Statistics for unique files only
-        console.print("\n[bold green]Unique Files Analysis (Excluding Duplicates)[/bold green]")
+        console.print(
+            "\n[bold green]Unique Files Analysis (Excluding Duplicates)[/bold green]"
+        )
         console.print(f"\n[bold cyan]Unique File Statistics:[/bold cyan]")
         console.print(f"Total unique files: {self.unique_total_files:,}")
-        console.print(f"Total unique size: {human_readable_size(self.unique_total_size)} ({self.unique_total_size:,} bytes)")
+        console.print(
+            f"Total unique size: {human_readable_size(self.unique_total_size)} ({self.unique_total_size:,} bytes)"
+        )
 
         # Size distribution for unique files
-        console.print(f"\n[bold cyan]Size Distribution (Unique Files Only):[/bold cyan]")
+        console.print(
+            f"\n[bold cyan]Size Distribution (Unique Files Only):[/bold cyan]"
+        )
         unique_cumulative_count = 0
         for range_def in SIZE_RANGES:
             count = self.unique_size_counts.get(range_def.name, 0)
@@ -222,37 +252,42 @@ class FileAnalysis:
                 continue
             unique_cumulative_count += count
             percentage = (count / self.unique_total_files) * 100
-            cumulative_percentage = (unique_cumulative_count / self.unique_total_files) * 100
+            cumulative_percentage = (
+                unique_cumulative_count / self.unique_total_files
+            ) * 100
             console.print(
                 f"[cyan]{range_def.name}:[/cyan] {count:,} files "
                 f"({percentage:.1f}% | cumulative: {unique_cumulative_count:,} files, {cumulative_percentage:.1f}%)"
             )
 
         # Extension statistics for unique files
-        console.print(f"\n[bold cyan]Top {top_extensions} Extensions (Unique Files Only):[/bold cyan]")
+        console.print(
+            f"\n[bold cyan]Top {top_extensions} Extensions (Unique Files Only):[/bold cyan]"
+        )
         for ext, count in self.unique_extension_counts.most_common(top_extensions):
             size = self.unique_extension_sizes[ext]
             percentage = (count / self.unique_total_files) * 100
-            size_percentage = (size / self.unique_total_size) * 100 if self.unique_total_size > 0 else 0
+            size_percentage = (
+                (size / self.unique_total_size) * 100
+                if self.unique_total_size > 0
+                else 0
+            )
             console.print(
                 f"[cyan]{ext}:[/cyan] {count:,} unique files ({percentage:.1f}%) | "
                 f"Total size: {human_readable_size(size)} ({size_percentage:.1f}% of unique size)"
             )
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Comprehensive file analysis: size distribution, duplicates, and extensions"
     )
-    parser.add_argument(
-        "directory",
-        type=str,
-        help="Directory to analyze"
-    )
+    parser.add_argument("directory", type=str, help="Directory to analyze")
     parser.add_argument(
         "--top-extensions",
         type=int,
         default=10,
-        help="Number of top extensions to show (default: 10)"
+        help="Number of top extensions to show (default: 10)",
     )
     args = parser.parse_args()
 
@@ -292,21 +327,29 @@ class FilesStatsPlugin(BasicScanner):
             target_dir = Path(rootpath if rootpath is not None else self.target)
 
             if not target_dir.is_dir():
-                console.print(f"[red]Error: {target_dir} is not a valid directory[/red]")
+                console.print(
+                    f"[red]Error: {target_dir} is not a valid directory[/red]"
+                )
                 return
 
             # Display the path being analyzed
-            console.print(f"\n[bold blue]Analyzing directory:[/bold blue] {target_dir.absolute()}")
+            console.print(
+                f"\n[bold blue]Analyzing directory:[/bold blue] {target_dir.absolute()}"
+            )
 
             analyzer.analyze_directory(target_dir)
 
             # Display results using rich console
-            console.print("\n[bold green]File Analysis Results (Including Duplicates)[/bold green]")
+            console.print(
+                "\n[bold green]File Analysis Results (Including Duplicates)[/bold green]"
+            )
 
             # Basic statistics
             console.print(f"\n[bold cyan]General Statistics:[/bold cyan]")
             console.print(f"Total files analyzed: {analyzer.total_files:,}")
-            console.print(f"Total size: {human_readable_size(analyzer.total_size)} ({analyzer.total_size:,} bytes)")
+            console.print(
+                f"Total size: {human_readable_size(analyzer.total_size)} ({analyzer.total_size:,} bytes)"
+            )
 
             # Size distribution with cumulative counts and percentages
             console.print(f"\n[bold cyan]Size Distribution:[/bold cyan]")
@@ -327,27 +370,39 @@ class FilesStatsPlugin(BasicScanner):
             console.print(f"\n[bold cyan]Duplication Statistics:[/bold cyan]")
             console.print(f"Duplicate files: {analyzer.duplicate_files:,}")
             console.print(f"Duplicate groups: {analyzer.duplicate_groups:,}")
-            console.print(f"Space wasted by duplicates: {human_readable_size(analyzer.space_wasted)}")
+            console.print(
+                f"Space wasted by duplicates: {human_readable_size(analyzer.space_wasted)}"
+            )
 
             # Extension statistics with sizes (top 10)
-            console.print(f"\n[bold cyan]Top 10 Extensions (Including Duplicates):[/bold cyan]")
+            console.print(
+                f"\n[bold cyan]Top 10 Extensions (Including Duplicates):[/bold cyan]"
+            )
             for ext, count in analyzer.extension_counts.most_common(10):
                 size = analyzer.extension_sizes[ext]
                 percentage = (count / analyzer.total_files) * 100
-                size_percentage = (size / analyzer.total_size) * 100 if analyzer.total_size > 0 else 0
+                size_percentage = (
+                    (size / analyzer.total_size) * 100 if analyzer.total_size > 0 else 0
+                )
                 console.print(
                     f"[cyan]{ext}:[/cyan] {count:,} files ({percentage:.1f}%) | "
                     f"Total size: {human_readable_size(size)} ({size_percentage:.1f}% of total size)"
                 )
 
             # Statistics for unique files only
-            console.print("\n[bold green]Unique Files Analysis (Excluding Duplicates)[/bold green]")
+            console.print(
+                "\n[bold green]Unique Files Analysis (Excluding Duplicates)[/bold green]"
+            )
             console.print(f"\n[bold cyan]Unique File Statistics:[/bold cyan]")
             console.print(f"Total unique files: {analyzer.unique_total_files:,}")
-            console.print(f"Total unique size: {human_readable_size(analyzer.unique_total_size)} ({analyzer.unique_total_size:,} bytes)")
+            console.print(
+                f"Total unique size: {human_readable_size(analyzer.unique_total_size)} ({analyzer.unique_total_size:,} bytes)"
+            )
 
             # Size distribution for unique files
-            console.print(f"\n[bold cyan]Size Distribution (Unique Files Only):[/bold cyan]")
+            console.print(
+                f"\n[bold cyan]Size Distribution (Unique Files Only):[/bold cyan]"
+            )
             unique_cumulative_count = 0
             for range_def in SIZE_RANGES:
                 count = analyzer.unique_size_counts.get(range_def.name, 0)
@@ -355,22 +410,32 @@ class FilesStatsPlugin(BasicScanner):
                     continue
                 unique_cumulative_count += count
                 percentage = (count / analyzer.unique_total_files) * 100
-                cumulative_percentage = (unique_cumulative_count / analyzer.unique_total_files) * 100
+                cumulative_percentage = (
+                    unique_cumulative_count / analyzer.unique_total_files
+                ) * 100
                 console.print(
                     f"[cyan]{range_def.name}:[/cyan] {count:,} files "
                     f"({percentage:.1f}% | cumulative: {unique_cumulative_count:,} files, {cumulative_percentage:.1f}%)"
                 )
 
             # Extension statistics for unique files (top 10)
-            console.print(f"\n[bold cyan]Top 10 Extensions (Unique Files Only):[/bold cyan]")
+            console.print(
+                f"\n[bold cyan]Top 10 Extensions (Unique Files Only):[/bold cyan]"
+            )
             for ext, count in analyzer.unique_extension_counts.most_common(10):
                 size = analyzer.unique_extension_sizes[ext]
                 percentage = (count / analyzer.unique_total_files) * 100
-                size_percentage = (size / analyzer.unique_total_size) * 100 if analyzer.unique_total_size > 0 else 0
+                size_percentage = (
+                    (size / analyzer.unique_total_size) * 100
+                    if analyzer.unique_total_size > 0
+                    else 0
+                )
                 console.print(
                     f"[cyan]{ext}:[/cyan] {count:,} unique files ({percentage:.1f}%) | "
                     f"Total size: {human_readable_size(size)} ({size_percentage:.1f}% of unique size)"
                 )
 
         except Exception as e:
-            console.print(f"[red]An error occurred during file analysis: {str(e)}[/red]")
+            console.print(
+                f"[red]An error occurred during file analysis: {str(e)}[/red]"
+            )

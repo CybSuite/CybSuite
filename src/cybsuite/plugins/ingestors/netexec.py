@@ -1,9 +1,9 @@
-from pathlib import Path
 import sqlite3
-from typing import Union, Optional, List, Iterator
+from pathlib import Path
+from typing import Iterator, List, Optional, Union
 
-from cybsuite.cyberdb import BaseIngestor, Metadata
 import devtools
+from cybsuite.cyberdb import BaseIngestor, Metadata
 
 # TODO: cached loggon LSA might not be up to date
 
@@ -58,13 +58,25 @@ def sqlite_iter_table(filepath: Path, table: str) -> Iterator[dict]:
 class NetexecIngestor(BaseIngestor):
     name = "netexec"
     extension = "nxc"  # Not really used since we handle databases
-    metadata = Metadata(description="Ingest NetExec databases and logs (.sam, .cached, .secrets, .db). Takes single files or folders in ~/.nxc. Not all tables are parsed yet.")
+    metadata = Metadata(
+        description="Ingest NetExec databases and logs (.sam, .cached, .secrets, .db). Takes single files or folders in ~/.nxc. Not all tables are parsed yet."
+    )
     supported_protocols = [
-        'ftp', 'ldap', 'mssql', 'nfs', 'rdp', 'smb',
-        'ssh', 'vnc', 'winrm', 'wmi'
+        "ftp",
+        "ldap",
+        "mssql",
+        "nfs",
+        "rdp",
+        "smb",
+        "ssh",
+        "vnc",
+        "winrm",
+        "wmi",
     ]
 
-    def do_run(self, filepath: Optional[str] = None, protocol: Optional[str] = None) -> None:
+    def do_run(
+        self, filepath: Optional[str] = None, protocol: Optional[str] = None
+    ) -> None:
         """
         Parse NetExec database files or directories.
 
@@ -85,8 +97,13 @@ class NetexecIngestor(BaseIngestor):
             # Default case: parse default workspace in ~/.nxc
             root_path = Path.home() / ".nxc"
             if not root_path.exists():
-                devtools.debug(f"Error: FileNotFoundError", f"Default NetExec path does not exist: {root_path}")
-                raise FileNotFoundError(f"Default NetExec path does not exist: {root_path}")
+                devtools.debug(
+                    f"Error: FileNotFoundError",
+                    f"Default NetExec path does not exist: {root_path}",
+                )
+                raise FileNotFoundError(
+                    f"Default NetExec path does not exist: {root_path}"
+                )
 
             self._parse_root_folder(root_path)
 
@@ -96,14 +113,21 @@ class NetexecIngestor(BaseIngestor):
             raise FileNotFoundError(f"Path does not exist: {path}")
 
         elif path.is_dir():
-            if any(path.glob('workspaces')):
+            if any(path.glob("workspaces")):
                 self._parse_root_folder(path)
-            elif any(path.glob("*.sam")) or any(path.glob("*.cached")) or any(path.glob("*.secrets")):
+            elif (
+                any(path.glob("*.sam"))
+                or any(path.glob("*.cached"))
+                or any(path.glob("*.secrets"))
+            ):
                 self._parse_logs_folder(path)
             elif any(path.glob("*.db")):
                 self._parse_workspace_folder(path)
             else:
-                devtools.debug(f"Error: ValueError", f"Directory contains no parseable files: {path}")
+                devtools.debug(
+                    f"Error: ValueError",
+                    f"Directory contains no parseable files: {path}",
+                )
                 raise ValueError(f"Directory contains no parseable files: {path}")
         elif path.is_file():
             if path.suffix == ".sam":
@@ -118,12 +142,11 @@ class NetexecIngestor(BaseIngestor):
                 devtools.debug(f"Error: ValueError", f"Unsupported file type: {path}")
                 raise ValueError(f"Unsupported file type: {path}")
 
-
     def _parse_root_folder(self, root_path: Path) -> None:
         """Parse a root directory containing workspaces"""
         self._parse_workspace_folder(root_path / "workspaces" / "default")
         self._parse_logs_folder(root_path / "logs")
-        # TODO: parse one or many workspaces?
+        # TODO: parse one or many workspaces?
         devtools.debug("Parsing root folder", root_path)
         # TODO: Implement root folder parsing
 
@@ -160,7 +183,7 @@ class NetexecIngestor(BaseIngestor):
 
         # Extract domain and IP from filename
         filename = sam_path.name
-        domain_ip = filename.split('_')[0:2]
+        domain_ip = filename.split("_")[0:2]
         domain_name = domain_ip[0].lower()
         ip = domain_ip[1]
 
@@ -170,7 +193,7 @@ class NetexecIngestor(BaseIngestor):
                     continue
 
                 # Parse hash line
-                parts = line.strip().split(':')
+                parts = line.strip().split(":")
                 if len(parts) >= 4:
                     username = parts[0].lower()
                     rid = parts[1].lower()
@@ -178,15 +201,19 @@ class NetexecIngestor(BaseIngestor):
                     ntlm_hash = parts[3].lower()
                     self.cyberdb.feed("dns", ip=ip, domain_name=domain_name)
                     # In SAM we have local users
-                    self.cyberdb.feed('windows_user',
-                                      host=ip,
-                                      user=username,
-                                      rid=rid,
-                                      lm=lm_hash,
-                                      ntlm=ntlm_hash)
+                    self.cyberdb.feed(
+                        "windows_user",
+                        host=ip,
+                        user=username,
+                        rid=rid,
+                        lm=lm_hash,
+                        ntlm=ntlm_hash,
+                    )
 
                 else:
-                    devtools.debug(f"Error: ValueError", f"Invalid SAM file: {sam_path}")
+                    devtools.debug(
+                        f"Error: ValueError", f"Invalid SAM file: {sam_path}"
+                    )
                     raise ValueError(f"Invalid SAM file: {sam_path}")
 
     def _parse_cached_file(self, cached_path: Path) -> None:
@@ -212,21 +239,17 @@ class NetexecIngestor(BaseIngestor):
     def _parse_ftp(self, db_path: Path) -> None:
         """Parse FTP database and debug table structures and row contents"""
         self.logger.info(f"Parsing FTP database: {db_path}")
-        # TODO more tables
+        # TODO more tables
         # List all tables
         for row in sqlite_iter_table(db_path, "hosts"):
             self.cyberdb.feed(
-                'service',
-                              host=row['host'],
-                              port=row['port'],
-                              protocol="tcp",
-                              type="ftp",
-                              banner=row['banner'])
-
-
-
-
-
+                "service",
+                host=row["host"],
+                port=row["port"],
+                protocol="tcp",
+                type="ftp",
+                banner=row["banner"],
+            )
 
     def _parse_ldap(self, db_path: Path) -> None:
         devtools.debug("Parsing LDAP database", db_path)
@@ -247,52 +270,61 @@ class NetexecIngestor(BaseIngestor):
     def _parse_smb(self, db_path: Path) -> None:
         for row in sqlite_iter_table(db_path, "hosts"):
             # TODO: parse OS
-            os = row['os']
+            os = row["os"]
             kwargs = {}
             if "windows" in os.lower():
-                kwargs['os_family'] = "windows"
-            if row['hostname']:
-                kwargs['hostname'] = row['hostname'].lower()
-            if row['domain'] and row['domain'] != "\x00":
-                kwargs['domain'] = row['domain']
+                kwargs["os_family"] = "windows"
+            if row["hostname"]:
+                kwargs["hostname"] = row["hostname"].lower()
+            if row["domain"] and row["domain"] != "\x00":
+                kwargs["domain"] = row["domain"]
 
             self.cyberdb.feed(
-                'host',
-                ip=row['ip'],
+                "host",
+                ip=row["ip"],
                 **kwargs,
             )
-            service = self.cyberdb.feed("service", host=row['ip'], port=445, protocol="tcp", type="smb")[0]
-            self.cyberdb.feed("service_smb", service=service, smbv1=bool(row['smbv1']), signing=bool(row['signing']))
+            service = self.cyberdb.feed(
+                "service", host=row["ip"], port=445, protocol="tcp", type="smb"
+            )[0]
+            self.cyberdb.feed(
+                "service_smb",
+                service=service,
+                smbv1=bool(row["smbv1"]),
+                signing=bool(row["signing"]),
+            )
             # TODO: spooler zerologon petipotam
 
-        # TODO: how to handle passwords, store all passwords
+        # TODO: how to handle passwords, store all passwords
         for row in sqlite_iter_table(db_path, "users"):
             kwargs = {}
             print(row)
-            if row['password']:
-                if row['credtype'] == "plaintext":
-                    kwargs['password'] = row['password']
-                elif row['credtype'] == "hash":
-                    if ":" in row['password']:
-                        kwargs['lm'], kwargs['ntlm'] = row['password'].split(':')
+            if row["password"]:
+                if row["credtype"] == "plaintext":
+                    kwargs["password"] = row["password"]
+                elif row["credtype"] == "hash":
+                    if ":" in row["password"]:
+                        kwargs["lm"], kwargs["ntlm"] = row["password"].split(":")
                     else:
-                        kwargs['ntlm'] = row['password']  # TODO: not sure if its lm or ntlm
+                        kwargs["ntlm"] = row[
+                            "password"
+                        ]  # TODO: not sure if its lm or ntlm
 
                 else:
-                    self.logger.warning(f"Unsupported credential type: {row['credtype']}")
+                    self.logger.warning(
+                        f"Unsupported credential type: {row['credtype']}"
+                    )
 
-            if row['domain'] and row['domain'] not in ['', '\x00']:
-                kwargs['domain'] = row['domain']
+            if row["domain"] and row["domain"] not in ["", "\x00"]:
+                kwargs["domain"] = row["domain"]
                 self.cyberdb.feed(
                     "ad_user",
-                    name=row['username'],
+                    name=row["username"],
                     **kwargs,
                 )
             else:
-                # TODO: check how we can add local hosts?
-                kwargs['domain'] = None
-
-
+                # TODO: check how we can add local hosts?
+                kwargs["domain"] = None
 
         # TODO: Parse other tables
 
