@@ -68,7 +68,8 @@ LIMIT_FILES = 10000000
 class JucySmbScanner(BasePassiveScanner):
     name = "juicy_smb"
     metadata = Metadata(
-        description="Scan SMB files for interesting extensions that might contain credentials or sensitive data"
+        description="Scan SMB files for interesting extensions that might contain credentials or sensitive data",
+        tags=["default"],
     )
 
     def do_run(self):

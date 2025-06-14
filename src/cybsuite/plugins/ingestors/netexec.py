@@ -268,6 +268,9 @@ class NetexecIngestor(BaseIngestor):
         # TODO: Implement RDP parsing
 
     def _parse_smb(self, db_path: Path) -> None:
+        hostnames = [
+            row["hostname"].lower() for row in sqlite_iter_table(db_path, "hosts")
+        ]
         for row in sqlite_iter_table(db_path, "hosts"):
             # TODO: parse OS
             os = row["os"]
@@ -296,7 +299,28 @@ class NetexecIngestor(BaseIngestor):
             # TODO: spooler zerologon petipotam
 
         # TODO: how to handle passwords, store all passwords
+        # TODO: fix users, because domain can be domain or hostname...
+        local_users = []
+        domain_users = []
         for row in sqlite_iter_table(db_path, "users"):
+            domain = row["domain"].lower()
+            user = row["username"].lower()
+
+            if domain == "\x00" or not user:
+                # Can do nothing with this, when user is empty, domain can be domain name or hostname we can't know
+                # TODO: even if domain is empty add password / username for bruteforce later
+                row_copy = row.copy()
+                row_copy["password"] = "REMOVED"
+                # TODO: add debug method that will write in file to be sent to developer
+                continue
+            elif domain == ".":
+                # Local user, but each time we have '.' (in my local tests) we have duplicated row, so might not need it
+                # TODO: consider adding username / password / hashes for later
+                continue
+                local_user = True
+            else:
+                domain_user = True
+
             kwargs = {}
             print(row)
             if row["password"]:
@@ -316,6 +340,11 @@ class NetexecIngestor(BaseIngestor):
                     )
 
             if row["domain"] and row["domain"] not in ["", "\x00"]:
+                domain = row["domain"].lower()
+                if domain in hostnames:
+                    local_users.append((row["username"], row["domain"]))
+                else:
+                    domain_users.append((row["username"], row["domain"]))
                 kwargs["domain"] = row["domain"]
                 self.cyberdb.feed(
                     "ad_user",
@@ -325,6 +354,7 @@ class NetexecIngestor(BaseIngestor):
             else:
                 # TODO: check how we can add local hosts?
                 kwargs["domain"] = None
+        devtools.debug(local_users, domain_users)
 
         # TODO: Parse other tables
 
