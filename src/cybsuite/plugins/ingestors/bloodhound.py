@@ -1,5 +1,4 @@
 from cybsuite.cyberdb import BaseIngestor, Metadata
-from devtools import debug
 
 
 class BloodhoundIngestor(BaseIngestor):
@@ -77,7 +76,6 @@ class BloodhoundIngestor(BaseIngestor):
                     "domain": group["Properties"]["domain"],
                     "description": group["Properties"].get("description", ""),
                 }
-                debug(metadata)
 
     def process_domains(self, filepath):
         with open(filepath) as f:
@@ -90,7 +88,6 @@ class BloodhoundIngestor(BaseIngestor):
                     "domain": domain["Properties"]["domain"],
                     "functionallevel": domain["Properties"].get("functionallevel", ""),
                 }
-                debug(metadata)
 
     def process_gpos(self, filepath):
         with open(filepath) as f:
@@ -103,7 +100,6 @@ class BloodhoundIngestor(BaseIngestor):
                     "domain": gpo["Properties"]["domain"],
                     "gpcpath": gpo["Properties"].get("gpcpath", ""),
                 }
-                debug(metadata)
 
     def process_ous(self, filepath):
         with open(filepath) as f:
@@ -118,7 +114,6 @@ class BloodhoundIngestor(BaseIngestor):
                         "blocksinheritance", False
                     ),
                 }
-                debug(metadata)
 
     def process_containers(self, filepath):
         with open(filepath) as f:
@@ -131,7 +126,6 @@ class BloodhoundIngestor(BaseIngestor):
                     "domain": container["Properties"]["domain"],
                     "description": container["Properties"].get("description", ""),
                 }
-                debug(metadata)
 
     def do_run(self, folderpath):
         # Map file patterns to their processing functions
@@ -146,7 +140,6 @@ class BloodhoundIngestor(BaseIngestor):
         }
 
         import glob
-        import json
         import os
 
         # Process each JSON file in the folder

@@ -1,6 +1,6 @@
 import sqlite3
 from pathlib import Path
-from typing import Iterator, List, Optional, Union
+from typing import Iterator, List, Optional
 
 import devtools
 from cybsuite.cyberdb import BaseIngestor, Metadata

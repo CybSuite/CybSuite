@@ -3,9 +3,8 @@ import hashlib
 import os
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import DefaultDict, Dict, List, Tuple
+from typing import DefaultDict, List
 
 from cybsuite.scanners.base_plugin import BasicScanner, Metadata
 from rich.console import Console
@@ -16,9 +15,6 @@ from rich.progress import (
     TaskProgressColumn,
     TextColumn,
 )
-
-#!/usr/bin/env python3
-
 
 console = Console()
 

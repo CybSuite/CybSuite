@@ -1,5 +1,4 @@
 import json
-import os
 from functools import cache
 
 from cybsuite.cyberdb import BaseIngestor, Metadata

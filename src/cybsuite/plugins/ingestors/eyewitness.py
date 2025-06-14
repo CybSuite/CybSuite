@@ -1,6 +1,5 @@
 import csv
 import os
-from pathlib import Path
 
 from cybsuite.cyberdb import BaseIngestor, Metadata
 
