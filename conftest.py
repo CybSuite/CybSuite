@@ -3,22 +3,31 @@ import os
 import psycopg2
 import pytest
 from cybsuite.cyberdb import CyberDB
+from cybsuite.cyberdb.config import cyberdb_config
 from psycopg2 import sql
-
-temp_db_name = "_cybsuite_cyberdb_"
-user = os.environ.get("CYBSUITE_DB_USER", "postgres")
-password = os.environ.get("CYBSUITE_DB_PASSWORD", "postgres")
-host = os.environ.get("CYBSUITE_DB_HOST", "127.0.0.1")
 
 _cyberdb = None
 
 
+def get_db_config():
+    """Get the database configuration from by priority: environment, config file, default."""
+    temp_db_name = "_cybsuite_cyberdb_"
+    user = os.environ.get("CYBSUITE_DB_USER", cyberdb_config["user"])
+    password = os.environ.get("CYBSUITE_DB_PASSWORD", cyberdb_config["password"])
+    host = os.environ.get("CYBSUITE_DB_HOST", cyberdb_config["host"])
+    port = os.environ.get("CYBSUITE_DB_PORT", cyberdb_config["port"])
+    return temp_db_name, user, password, host, port
+
+
 @pytest.fixture
 def new_cyberdb() -> CyberDB:
-    """Return a new PentestDB instance and clean the DB after tests."""
+    """Return a new CyberDB instance and clean the DB after tests."""
     global _cyberdb
     if _cyberdb is None:
-        _cyberdb = CyberDB(temp_db_name, user=user, password=password, host=host)
+        temp_db_name, user, password, host, port = get_db_config()
+        _cyberdb = CyberDB(
+            temp_db_name, user=user, password=password, host=host, port=port
+        )
         _cyberdb.migrate()
     yield _cyberdb
     _cyberdb.cleardb()

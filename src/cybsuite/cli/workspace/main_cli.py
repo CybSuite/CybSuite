@@ -3,6 +3,7 @@
 
 from koalak.subcommand_parser import SubcommandParser
 
+from .cmd_conf import add_cmd_conf
 from .cmd_create import add_cmd_create
 from .cmd_delete import add_cmd_delete
 from .cmd_info import add_cmd_info
@@ -16,6 +17,7 @@ add_cmd_info(cmd_main)
 add_cmd_create(cmd_main)
 add_cmd_switch(cmd_main)
 add_cmd_delete(cmd_main)
+add_cmd_conf(cmd_main)
 
 
 def main():

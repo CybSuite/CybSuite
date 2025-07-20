@@ -1,6 +1,9 @@
 nav:
     - index.md
+    - available_plugins.md
     - install.md
-    - review
     - cyberdb
+    - review
+    - Extension Developer Guide: dev_extension
+    - Core Developer Guide: dev_core
     - ...

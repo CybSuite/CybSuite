@@ -21,6 +21,11 @@ fields:
   ntlm:
     type: str
     default: null
+  rid:
+    type: str
+    indexed: true
+    default: null
+    hidden_in_list: true
   sid:
     type: str
     indexed: true

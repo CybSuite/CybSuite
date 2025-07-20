@@ -17,6 +17,9 @@ test:
     - postgres:latest
   variables:
     CYBSUITE_DB_HOST: "postgres"
+    CYBSUITE_DB_USER: "postgres"
+    CYBSUITE_DB_PASSWORD: "postgres"
+    CYBSUITE_DB_PORT: "5432"
     POSTGRES_USER: "postgres"
     POSTGRES_PASSWORD: "postgres"
   # rules:

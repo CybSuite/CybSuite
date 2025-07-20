@@ -1,6 +1,6 @@
 import argparse
 
-from cybsuite.cyberdb import CyberDB, pm_passive_scanners
+from cybsuite.cyberdb import CyberDB, pm_cyberdb_scanner
 from koalak.subcommand_parser import SubcommandParser
 
 from .utils_cmd import CMD_GROUP_PLUGINS, print_scanners_table
@@ -27,7 +27,7 @@ def add_cli_scan(cli_main: SubcommandParser):
     subcmd.add_argument(
         "name",
         help="Name of the tool",
-        choices=["all"] + list(e.name for e in pm_passive_scanners),
+        choices=["all"] + list(e.name for e in pm_cyberdb_scanner),
     )
     subcmd.register_function(_run)
 

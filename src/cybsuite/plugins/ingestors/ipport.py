@@ -5,11 +5,9 @@ from .utils import validate_ip_address
 
 class IpportIngestor(BaseIngestor):
     name = "ipport"
-    extension = "ip.txt"
-    extensions = ["ip.txt", "ipport.txt", "ipportprotocol.txt"]
 
     metadata = Metadata(
-        description="Ingest simple text files containing ip, ip:port (default protocol tcp) or ip:port:protocol"
+        description="Ingest simple text files containing ip, ip:port (default protocol tcp) or ip:port:protocol. Feed host and service."
     )
 
     def do_run(self, filepath):

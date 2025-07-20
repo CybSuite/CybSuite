@@ -1,0 +1,6 @@
+
+nav:
+    - introduction.md
+    - plugins.md
+    - extension.md
+    - ...

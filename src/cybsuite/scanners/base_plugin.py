@@ -4,14 +4,15 @@ import subprocess
 
 import pexpect
 import requests
-from cybsuite.consts import PATH_CYBSUITE
-from cybsuite.cyberdb import CyberDB, CyberDBScanner
+
+# from cybsuite.consts import PATH_CYBSUITE
+from cybsuite.cyberdb import CyberDB, CyberDBPluginBaseMixin
 from koalak.plugin_manager import Plugin, PluginManager, abstract
 
 pm_home_path = PATH_CYBSUITE / "scanners"
 
 
-class BasicScanner(CyberDBScanner, Plugin):
+class BaseScanner(CyberDBPluginBaseMixin, Plugin):
     groups = []
     pre_requesties = None
 
@@ -88,7 +89,7 @@ here = pathlib.Path(__file__).parent
 builtin_data_path = here / "data"  # TODO: fix this
 pm_scanners = PluginManager(
     "scanners",
-    base_plugin=BasicScanner,
+    base_plugin=BaseScanner,
     builtin_data_path=builtin_data_path,
     home_path=PATH_CYBSUITE / pm_home_path,
 )

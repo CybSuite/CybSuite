@@ -1,1 +1,3 @@
-from . import formatters, ingestors, passive_scanners, reporters  # noqa: F401
+from . import cyberdb_scanner, formatters, ingestors, reporters  # noqa: F401
+
+# TODO: scanners is not imported, it is broken

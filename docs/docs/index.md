@@ -2,11 +2,10 @@
 
 ## Introduction
 
-**CybSuite** is a set of tools for security assessments and automation. It is actively under development and currently includes the following tools:
+> **Warning**
+> This project is currently in Alpha stage and under active development. While core functionality is implemented and tested, the API and features may change significantly between versions.
 
-- [**cybs-Review**](review/introduction.md): A framework for configuration review, now supporting Windows systems for hardening and privilege escalation (privesc). Support for Linux and cloud platforms (Microsoft Azure and AWS) is planned.
-- [**CyberDB**](cyberdb/introduction.md): An extensible database designed to store all security-related information. While primarily used by cybs-review, it can also store penetration test data, configuration reviews, vulnerabilities, and more.
+**CybSuite** is a collection of security tools and scripts for penetration testing, configuration review, and reconnaissance. The following tools are available:
 
-## Future Plans
-
-CybSuite is still in development, with future updates planned to include more plugins for configuration review, additional privilege escalation checks, and penetration testing tools.
+- **[cybs-db]**: A centralized database for penetration testing, configuration review, and security assessments. Features built-in ingestors for common security tools (Nmap, Masscan, Netexec, Bloodhound, etc.), passive vulnerability scanning capabilities, reporting capabilities, and a planned web interface.
+- **[cybs-review]**: A framework for configuration review that performs post-analysis of extracted configurations. Currently working for Windows systems, with Linux support coming soon.

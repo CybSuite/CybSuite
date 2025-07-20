@@ -7,9 +7,9 @@ from typing import Iterable, List, Union
 from cybsuite.core.logger import get_logger
 from cybsuite.cyberdb.db_schema import cyberdb_schema
 
+from ..bases.base_cyberdb_scanner import pm_cyberdb_scanner
 from ..bases.base_formatter import pm_formatters
-from ..bases.base_ingestor import BaseIngestor, pm_ingestors
-from ..bases.base_passive_scanner import pm_passive_scanners
+from ..bases.base_ingestor import pm_ingestors
 from ..consts import PATH_KNOWLEDGEBASE
 from .models import BaseCyberDB
 
@@ -148,19 +148,65 @@ class CyberDB(BaseCyberDB):
         else:
             return output
 
+    def get_controls(self, control_name: str, **filters):
+        return self.request("control", control_definition__name=control_name, **filters)
+
+    def get_observations(self, control_name: str, **filters):
+        return self.request(
+            "control", control_definition__name=control_name, status="ko", **filters
+        )
+
     def scan(self, scanner_name):
-        scanner_cls = pm_passive_scanners[scanner_name]
+        scanner_cls = pm_cyberdb_scanner[scanner_name]
         scanner_instance = scanner_cls(self)
         scanner_instance.run()
+
+    def scan_for_controls(self, controls_to_check: List[str] | str):
+        # Normalize input
+        if isinstance(controls_to_check, str):
+            controls_to_check = [controls_to_check]
+        controls_to_check = set(controls_to_check)
+
+        # Get scanners that match the requested controls
+        matching_scanners_names = set()
+        covered_controls = set()
+
+        for scanner_cls in pm_cyberdb_scanner:
+            matching_controls = [
+                control_to_check
+                for control_to_check in controls_to_check
+                if control_to_check in scanner_cls.controls
+            ]
+            if matching_controls:
+                matching_scanners_names.add(scanner_cls.name)
+                covered_controls.update(matching_controls)
+
+        # Check for controls without scanners
+        uncovered_controls = set(controls_to_check) - covered_controls
+        if uncovered_controls:
+            raise ValueError(
+                f"No scanners found for controls: {list(uncovered_controls)}"
+            )
+
+        # Run all matching scanners
+        for scanner_cls_name in matching_scanners_names:
+            matching_controls = [
+                control
+                for control in controls_to_check
+                if control in pm_cyberdb_scanner[scanner_cls_name].controls
+            ]
+            logger.info(
+                f"Running scanner '{scanner_cls_name}' for controls: {matching_controls}"
+            )
+            scanner_cls = pm_cyberdb_scanner[scanner_cls_name]
+            scanner_instance = scanner_cls(self)
+            scanner_instance.run()
 
     def ingest(
         self, toolname: str, filepaths: Union[str, Path, List[Union[str, Path]]]
     ):
         if isinstance(filepaths, (str, Path)):
             filepaths = [filepaths]
-
-        if toolname == "all":
-            return self.ingest_all(filepaths)
 
         ingestor_cls = pm_ingestors[toolname]
         ingestor_instance = ingestor_cls(self)
@@ -172,17 +218,4 @@ class CyberDB(BaseCyberDB):
                 logger.error(
                     f"Error ingesting file {filepath} with {toolname} ingestor: {type(e).__name__} - {str(e)}"
                 )
-
-    def ingest_all(self, root_filepath):
-        for e in self.iter_ingest_all(root_filepath):
-            pass  ## to iter through all the iterator and ingest every thing
-
-    def iter_ingest_all(self, root_filepath):
-        for filepath in utils.iterate_files(root_filepath):
-            for (
-                ext,
-                ingestor_cls,
-            ) in BaseIngestor._map_extensions_to_ingestor_cls.items():
-                if filepath.endswith(ext):
-                    self.ingest(ingestor_cls.name, filepath)
-                    yield filepath, ingestor_cls
+                raise e

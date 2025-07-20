@@ -45,6 +45,9 @@ jobs:
       - name: Run tests
         env:
           CYBSUITE_DB_HOST: localhost
+          CYBSUITE_DB_USER: postgres
+          CYBSUITE_DB_PASSWORD: postgres
+          CYBSUITE_DB_PORT: 5432
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
         run: tox

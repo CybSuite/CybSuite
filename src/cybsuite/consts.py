@@ -1,29 +1,19 @@
 import os
-import platform
-import pwd
+import tempfile
 from pathlib import Path
 
 # Update it also in pyproject.toml
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 LOGGER_NAME = "cybsuite"
 
 
 if "CYBSUITE_HOME" in os.environ:
     PATH_CYBSUITE = Path(os.environ["CYBSUITE_HOME"])
 else:
-    if "CYBSUITE_USER" in os.environ:
-        _USER = os.environ["CYBSUITE_USER"]
-    elif "SUDO_USER" in os.environ:
-        _USER = os.environ["SUDO_USER"]
-    elif "USER" in os.environ:
-        _USER = os.environ["USER"]
+    if "HOME" in os.environ:
+        PATH_CYBSUITE = Path(os.environ["HOME"]) / "cybsuite"
     else:
-        _USER = os.getlogin()
-    if platform.system() == "Windows":
-        _PATH_HOME = Path(os.path.expanduser(f"~{_USER}"))
-    else:
-        _PATH_HOME = Path(pwd.getpwnam(_USER).pw_dir)
-    PATH_CYBSUITE = _PATH_HOME / "cybsuite"
+        PATH_CYBSUITE = Path(tempfile.gettempdir()) / "cybsuite"
 
 
 PATH_CYBSUITE = PATH_CYBSUITE.expanduser()

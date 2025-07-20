@@ -2,9 +2,9 @@ import functools
 from typing import Union
 
 import rich
+from cybsuite.core.printer import printer
 from cybsuite.cyberdb import CyberDB
 from cybsuite.scanners import pm_scanners
-from cybsuite_pro.printer import printer
 
 from ..utils import log_exception
 from .prerequesites import pm_prerequesites

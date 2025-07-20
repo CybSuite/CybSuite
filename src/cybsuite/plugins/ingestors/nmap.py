@@ -1,5 +1,6 @@
 import re
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 from cybsuite.cyberdb import BaseIngestor, Metadata
 
@@ -88,8 +89,19 @@ NMAP_OS_ACCURACY_MIN = 80  # below this percent, we don't check OS
 
 class NmapIngestor(BaseIngestor):
     name = "nmap"
-    extension = "nmap.xml"
-    metadata = Metadata(description="Ingest nmap XML output file")
+    metadata = Metadata(
+        description="Ingest nmap XML output file. Feed host, service and dns."
+    )
+
+    autodetect_is_file = True
+
+    @classmethod
+    def autodetect_from_path(cls, path: Path) -> bool:
+        if path.name.endswith("nmap.xml"):
+            return True
+        elif "<!DOCTYPE nmaprun>" in cls.autodetect_get_first_500_chars(path):
+            return True
+        return False
 
     def do_run(self, filepath):
         # Parsing the xml file

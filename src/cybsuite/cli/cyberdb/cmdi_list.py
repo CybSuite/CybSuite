@@ -2,9 +2,9 @@ import itertools
 
 import koalak
 from cybsuite.cyberdb import (
+    pm_cyberdb_scanner,
     pm_formatters,
     pm_ingestors,
-    pm_passive_scanners,
     pm_reporters,
 )
 from koalak.subcommand_parser import SubcommandParser
@@ -20,7 +20,7 @@ from .utils_cmd import (
 plugin_managers = {
     pm_ingestors.name: pm_ingestors,
     pm_reporters.name: pm_reporters,
-    pm_passive_scanners.name: pm_passive_scanners,
+    pm_cyberdb_scanner.name: pm_cyberdb_scanner,
     pm_formatters.name: pm_formatters,
 }
 
@@ -44,7 +44,7 @@ def _run(args):
     COLOR_MAP = {
         pm_ingestors.name: "green",
         pm_reporters.name: "blue",
-        pm_passive_scanners.name: "magenta",
+        pm_cyberdb_scanner.name: "magenta",
         pm_formatters.name: "yellow",
     }
 
@@ -56,7 +56,7 @@ def _run(args):
             print_ingestors_table()
         elif args.type == pm_reporters.name:
             print_reporters_table()
-        elif args.type == pm_passive_scanners.name:
+        elif args.type == pm_cyberdb_scanner.name:
             print_scanners_table()
         elif args.type == pm_formatters.name:
             print_formatters_table()

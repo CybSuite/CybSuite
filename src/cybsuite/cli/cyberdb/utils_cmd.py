@@ -1,8 +1,8 @@
 import koalak
 from cybsuite.cyberdb import (
+    pm_cyberdb_scanner,
     pm_formatters,
     pm_ingestors,
-    pm_passive_scanners,
     pm_reporters,
 )
 
@@ -40,7 +40,7 @@ def print_reporters_table():
 
 def print_scanners_table():
     rows = []
-    for scanner in pm_passive_scanners:
+    for scanner in pm_cyberdb_scanner:
         rows.append(
             {
                 "name": scanner.name,

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from cybsuite.consts import PATH_CYBSUITE
-from cybsuite.cyberdb import CyberDBScanner
+from cybsuite.cyberdb import CyberDBPluginBaseMixin
 from koalak.plugin_manager import Plugin, PluginManager, abstract
 
 pm_home_path = PATH_CYBSUITE / "reviewers"
@@ -47,7 +47,7 @@ class BaseTypeReviewer(Plugin):
 pm_type_reviewers = PluginManager("type_reviewers", base_plugin=BaseTypeReviewer)
 
 
-class BaseReviewer(Plugin, CyberDBScanner):
+class BaseReviewer(Plugin, CyberDBPluginBaseMixin):
     type_reviewer: BaseTypeReviewer = None
     files: dict[str, Path] = {}
 

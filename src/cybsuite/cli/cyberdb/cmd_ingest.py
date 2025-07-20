@@ -19,11 +19,8 @@ def add_cli_ingest(cli_main: SubcommandParser):
         description="Import data from known tools (ex: nmap)",
     )
     help_ingest_cli = """
-       Import results of a given tool to the pentestdb database:
-       You can recursively import a folder with `pentestdb ingest all <path_folder>`, the selected ingestor is based on the file extension:
-       """
-    for ingestor in pm_ingestors:
-        help_ingest_cli += f"  {ingestor.name.ljust(10)}: {ingestor.extension!r}\n"
+       Import results of a given tool to the cyberdb:
+       You can recursively import a folder with `cybs-db ingest all <path_folder>`, the selected ingestor is based on an autodetect method implemented by each plugin"""
 
     subcmd.add_argument(
         "--list",

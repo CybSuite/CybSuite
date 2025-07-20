@@ -7,9 +7,9 @@ _default_config = {
     "cyberdb": {
         "name": "cyberdb_default",
         "user": "postgres",
-        "password": "postgres",
+        "password": "",
         "host": "127.0.0.1",
-        "port": 5432,
+        "port": 13372,
     },
 }
 

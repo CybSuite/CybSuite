@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "cybsuite"
 # Update version also in consts.py
-version = "0.1.1"
+version = "0.1.2"
 description = "CybSuite"
 authors = ["Nazime LAKEHAL <nazime.lkh@gmail.com>"]
 license = "Apache-2.0"
@@ -32,7 +32,8 @@ psycopg2-binary = ">=2.9.10,<3.0.0"
 uvicorn = "^0.34.2"
 fastapi = "^0.115.12"
 python-multipart = "^0.0.20"
-# TODO: add ollama
+pexpect = "^4.9.0"
+devtools = "^0.12.2"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
