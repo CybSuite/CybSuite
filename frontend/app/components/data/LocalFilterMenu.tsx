@@ -26,16 +26,16 @@ interface LocalFilterMenuProps {
 
 // Local Filter Menu Component (independent of URL parameters)
 const LocalFilterMenu = React.forwardRef<
-    { resetFilters: () => void }, 
+    { resetFilters: () => void },
     LocalFilterMenuProps
 >(({ table, onFiltersChange }, ref) => {
     const [open, setOpen] = React.useState(false);
     const [filters, setFilters] = React.useState<any[]>([]);
     const [globalLogic, setGlobalLogic] = React.useState<'and' | 'or'>('and');
-    
+
     const filteredColumns = React.useMemo(() => {
         try {
-            return table.getAllColumns().filter((column: any) => 
+            return table.getAllColumns().filter((column: any) =>
                 column.columnDef.enableColumnFilter && column.columnDef.meta?.label
             );
         } catch {
@@ -136,7 +136,7 @@ const LocalFilterMenu = React.forwardRef<
     const applyFilters = React.useCallback(() => {
         // Create a custom global filter function that handles our advanced filters
         const validFilters = filters.filter(filter => filter.column && filter.operator);
-        
+
         if (validFilters.length === 0) {
             table.setGlobalFilter(undefined);
             return;
@@ -173,11 +173,11 @@ const LocalFilterMenu = React.forwardRef<
             return null;
         }
 
-        if ((filter.operator === 'has_any_of' || filter.operator === 'has_none_of') && 
+        if ((filter.operator === 'has_any_of' || filter.operator === 'has_none_of') &&
             (columnType === 'select' || columnType === 'multiSelect')) {
             const options = column?.columnDef?.meta?.options || [];
             const selectedValues = filter.value || [];
-            
+
             return (
                 <div className="space-y-2">
                     <Combobox
@@ -279,7 +279,7 @@ const LocalFilterMenu = React.forwardRef<
                         Add conditions to filter your data
                     </p>
                 </div>
-                
+
                 {/* Global Logic Selector */}
                 {filters.length > 1 && (
                     <div className="p-4 border-b">
@@ -303,7 +303,7 @@ const LocalFilterMenu = React.forwardRef<
                         </div>
                     </div>
                 )}
-                
+
                 <div className="p-4 space-y-4 max-h-96 overflow-y-auto">
                     {filters.length === 0 && (
                         <div className="text-center py-8 text-muted-foreground">
@@ -311,7 +311,7 @@ const LocalFilterMenu = React.forwardRef<
                             <p className="text-xs mt-1">Click "Add filter" to get started.</p>
                         </div>
                     )}
-                    
+
                     {filters.map((filter, index) => (
                         <div key={filter.id} className="space-y-3">
                             {/* Show logic indicator for multiple filters */}
@@ -381,7 +381,7 @@ const LocalFilterMenu = React.forwardRef<
                                 {filter.column && filter.operator && (
                                     <div className="flex-2 space-y-2">
                                         {filter.operator === 'is_between' ? (
-                                            <label className="text-xs font-medium text-muted-foreground">Date range</label>   
+                                            <label className="text-xs font-medium text-muted-foreground">Date range</label>
                                         ) : (
                                             <label className="text-xs font-medium text-muted-foreground">Value</label>
                                         )}

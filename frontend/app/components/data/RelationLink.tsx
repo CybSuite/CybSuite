@@ -35,7 +35,7 @@ export function RelationLink({ value, entityName, isArray = false, className }: 
 
           if (!itemId) {
             return (
-              <span 
+              <span
                 key={index}
                 className="inline-flex items-center px-2 py-1 rounded-md bg-gray-50 text-gray-800 text-xs font-medium"
               >

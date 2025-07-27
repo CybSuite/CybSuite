@@ -15,10 +15,10 @@ export function useApi<T>(
     const fetchData = async () => {
       setLoading(true);
       setError(null);
-      
+
       try {
         const response = await apiCall();
-        
+
         if (response.error) {
           setError(response.error);
           setData(null);
@@ -40,10 +40,10 @@ export function useApi<T>(
   const refetch = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const response = await apiCall();
-      
+
       if (response.error) {
         setError(response.error);
         setData(null);

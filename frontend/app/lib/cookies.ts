@@ -2,7 +2,7 @@
 export const cookieUtils = {
   get: (name: string): string | null => {
     if (typeof document === 'undefined') return null;
-    
+
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
     if (parts.length === 2) {
@@ -10,7 +10,7 @@ export const cookieUtils = {
     }
     return null;
   },
-  
+
   set: (name: string, value: string, options: {
     path?: string;
     domain?: string;
@@ -20,7 +20,7 @@ export const cookieUtils = {
     secure?: boolean;
   } = {}): void => {
     if (typeof document === 'undefined') return;
-    
+
     const {
       path = '/',
       domain,
@@ -29,31 +29,31 @@ export const cookieUtils = {
       sameSite = 'lax',
       secure = false
     } = options;
-    
+
     let cookieString = `${name}=${encodeURIComponent(value)}`;
-    
+
     if (path) cookieString += `; path=${path}`;
     if (domain) cookieString += `; domain=${domain}`;
     if (expires) cookieString += `; expires=${expires.toUTCString()}`;
     if (maxAge) cookieString += `; max-age=${maxAge}`;
     if (sameSite) cookieString += `; samesite=${sameSite}`;
     if (secure) cookieString += `; secure`;
-    
+
     document.cookie = cookieString;
   },
-  
+
   remove: (name: string, options: {
     path?: string;
     domain?: string;
   } = {}): void => {
     if (typeof document === 'undefined') return;
-    
+
     const { path = '/', domain } = options;
-    
+
     let cookieString = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
     if (path) cookieString += `; path=${path}`;
     if (domain) cookieString += `; domain=${domain}`;
-    
+
     document.cookie = cookieString;
   }
 };

@@ -48,7 +48,7 @@ export class ApiClient {
 
     try {
       const response = await fetch(url, config);
-      
+
       // Check if response is JSON
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
@@ -60,7 +60,7 @@ export class ApiClient {
           status: response.status,
         };
       }
-      
+
       const data = await response.json();
 
       if (!response.ok) {
@@ -121,13 +121,13 @@ export const apiClient = new ApiClient(API_BASE_URL);
 // Server-side API client factory (for use in Server Components, API routes, etc.)
 export function createServerApiClient(cookies?: string): ApiClient {
   const serverUrl = process.env.DJANGO_API_URL || 'http://backend:8000';
-  
+
   // Create a custom API client that includes cookies
   class ServerApiClient extends ApiClient {
     constructor(baseUrl: string, private cookieHeader?: string) {
       super(baseUrl);
     }
-    
+
     protected async request<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
       const config: RequestInit = {
         ...options,
@@ -139,7 +139,7 @@ export function createServerApiClient(cookies?: string): ApiClient {
       return super.request(endpoint, config);
     }
   }
-  
+
   return new ServerApiClient(serverUrl, cookies);
 }
 
@@ -167,7 +167,7 @@ export const api = {
       if (params?.limit !== undefined) searchParams.set('limit', params.limit.toString());
       if (params?.search) searchParams.set('search', params.search);
       if (params?.filters) searchParams.set('filters', params.filters);
-      
+
       const queryString = searchParams.toString();
       const endpoint = `/api/v1/data/entity/${entity}/${queryString ? `?${queryString}` : ''}`;
       return apiClient.get<EntityRecord[]>(endpoint);
@@ -176,7 +176,7 @@ export const api = {
       const searchParams = new URLSearchParams();
       if (params?.limit !== undefined) searchParams.set('limit', params.limit.toString());
       if (params?.search) searchParams.set('search', params.search);
-      
+
       const queryString = searchParams.toString();
       const endpoint = `/api/v1/data/options/${entity}/${queryString ? `?${queryString}` : ''}`;
       return apiClient.get<Array<{ id: string | number; repr: string }>>(endpoint);
@@ -220,7 +220,7 @@ export const api = {
       },
     },
   },
-  
+
   // Legacy endpoints (backward compatibility)
   legacy: {
     healthCheck: () => {
@@ -284,7 +284,7 @@ export const serverApi = {
       if (params?.limit !== undefined) searchParams.set('limit', params.limit.toString());
       if (params?.search) searchParams.set('search', params.search);
       if (params?.filters) searchParams.set('filters', params.filters);
-      
+
       const queryString = searchParams.toString();
       const endpoint = `/api/v1/data/entity/${entity}/${queryString ? `?${queryString}` : ''}`;
       return createServerApiClient(cookies).get<EntityRecord[]>(endpoint);

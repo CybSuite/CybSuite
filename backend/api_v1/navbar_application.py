@@ -148,8 +148,10 @@ class NavApplicationSet:
 
     def to_dict(self):
         return {
-            "nav_applications": {name: app.to_dict() for name, app in self.nav_applications.items()},
-            "settings_item": self.settings_item.to_dict()
+            "nav_applications": {
+                name: app.to_dict() for name, app in self.nav_applications.items()
+            },
+            "settings_item": self.settings_item.to_dict(),
         }
 
     def __iter__(self):
@@ -198,7 +200,7 @@ class NavApplication:
             "name": self.name,
             "color": self.color,
             "menu": self.menu.to_dict(),
-            "is_selected": self.is_selected
+            "is_selected": self.is_selected,
         }
 
     def __iter__(self):
@@ -235,7 +237,9 @@ class NavMenu:
 
     def to_dict(self):
         return {
-            "nav_menu_items": {name: item.to_dict() for name, item in self.nav_menu_items.items()}
+            "nav_menu_items": {
+                name: item.to_dict() for name, item in self.nav_menu_items.items()
+            }
         }
 
     def __iter__(self):
@@ -272,7 +276,7 @@ class NavMenuItem:
     def to_dict(self):
         return {
             "name": self.name,
-            "droplist_items": [item.to_dict() for item in self.droplist_items]
+            "droplist_items": [item.to_dict() for item in self.droplist_items],
         }
 
     def __iter__(self):
@@ -346,7 +350,7 @@ class NavMenuDropListItem:
             "view": self.view,
             "namespace": self.namespace,
             "side_menu": self.side_menu.to_dict() if self.side_menu else None,
-            "is_selected": self.is_selected
+            "is_selected": self.is_selected,
         }
 
     def __iter__(self):
@@ -400,7 +404,7 @@ class NavSideMenu:
     def to_dict(self):
         return {
             "namespace": self.namespace,
-            "side_menu_items": [item.to_dict() for item in self.side_menu_items]
+            "side_menu_items": [item.to_dict() for item in self.side_menu_items],
         }
 
     def __iter__(self):
@@ -421,20 +425,16 @@ class NavSideMenuItem:
         return view_parts[0]
 
     def to_dict(self):
-        return {
-            "name": self.name,
-            "view": self.view,
-            "is_selected": self.is_selected
-        }
+        return {"name": self.name, "view": self.view, "is_selected": self.is_selected}
 
 
 # NAVIGATION DEFINITION #
 # ===================== #
 import copy
 
+from cybsuite.cyberdb import cyberdb_schema
 from django.http import HttpRequest
 from django.urls import resolve, reverse
-from cybsuite.cyberdb import cyberdb_schema
 
 
 def convert_django_url_to_nextjs_path(django_url: str) -> str:
@@ -469,16 +469,16 @@ def convert_django_url_to_nextjs_path(django_url: str) -> str:
                     return f"/settings/{view}"
                 else:
                     return f"/{app}/{namespace}/{view}"
-        
+
         # Handle specific URL patterns
         if django_url.startswith("data:list/"):
             model_name = django_url.replace("data:list/", "")
             return f"/data/{model_name}"
-        
+
         # Fallback for simple URLs
         if django_url == "securitysuiteui:dummy":
             return "/placeholder"
-        
+
         return f"/{django_url.replace(':', '/')}"
 
 
@@ -678,20 +678,23 @@ def nav_links(request: HttpRequest):
     nav_apps = copy.deepcopy(nav_applications)
     first_app = list(nav_apps.nav_applications.keys())[0]
     selected_nav_app = request.COOKIES.get("nav_app", first_app)
-    
+
     # URL decode the cookie value in case it's encoded
     try:
         from urllib.parse import unquote
-        decoded_nav_app = unquote(selected_nav_app) if selected_nav_app else selected_nav_app
+
+        decoded_nav_app = (
+            unquote(selected_nav_app) if selected_nav_app else selected_nav_app
+        )
         selected_nav_app = decoded_nav_app
     except Exception:
         # If decoding fails, use the original value
         pass
-    
+
     # Validate that the selected app exists, fall back to first app if not
     if selected_nav_app not in nav_apps.nav_applications:
         selected_nav_app = first_app
-    
+
     nav_apps.select(selected_nav_app)
 
     # Set the selected drop list item and the side list item - and get the side menu list
@@ -699,26 +702,20 @@ def nav_links(request: HttpRequest):
 
     # Build simplified structure for Next.js
     current_app = nav_apps[selected_nav_app]
-    
+
     # Create simplified navigation structure
     navigation = {
         # Current application info
         "current_app": {
             "name": current_app.name,
             "color": current_app.color,
-            "is_selected": current_app.is_selected
+            "is_selected": current_app.is_selected,
         },
-        
         # Available applications for app switcher
         "available_apps": [
-            {
-                "name": app.name,
-                "color": app.color,
-                "is_selected": app.is_selected
-            }
+            {"name": app.name, "color": app.color, "is_selected": app.is_selected}
             for app in nav_apps
         ],
-        
         # Current app's navigation items
         "navbar_items": [
             {
@@ -728,14 +725,13 @@ def nav_links(request: HttpRequest):
                         "name": item.name,
                         "url": convert_django_url_to_nextjs_path(item.view),
                         "is_selected": item.is_selected,
-                        "has_sidebar": item.side_menu is not None
+                        "has_sidebar": item.side_menu is not None,
                     }
                     for item in menu_item.droplist_items
-                ]
+                ],
             }
             for menu_item in current_app.menu
         ],
-        
         # Sidebar items (if current page has sidebar)
         "sidebar": {
             "has_sidebar": len(side_menu_list) > 0,
@@ -743,27 +739,27 @@ def nav_links(request: HttpRequest):
                 {
                     "name": item.name,
                     "url": convert_django_url_to_nextjs_path(item.view),
-                    "is_selected": item.is_selected
+                    "is_selected": item.is_selected,
                 }
                 for item in side_menu_list
-            ] if side_menu_list else []
+            ]
+            if side_menu_list
+            else [],
         },
-        
         # User menu items
         "user_menu": {
             "settings": {
                 "name": "Settings",
                 "url": convert_django_url_to_nextjs_path(nav_apps.settings_item.view),
-                "is_selected": nav_apps.settings_item.is_selected
+                "is_selected": nav_apps.settings_item.is_selected,
             }
         },
-        
         # Meta information
         "meta": {
             "current_view": current_view,
             "current_url_name": current_url_name,
-            "namespace": namespace
-        }
+            "namespace": namespace,
+        },
     }
-    
+
     return navigation

@@ -11,7 +11,7 @@ export default async function ServerCheck() {
     <div className="p-6 bg-purple-50 rounded-lg mb-6">
       <h2 className="text-xl font-semibold mb-4">🔧 Server-Side Data (SSR) - Health App</h2>
       <div className="space-y-4">
-        
+
         {/* Health Check Data */}
         <div className="p-4 bg-white rounded">
           <h3 className="font-semibold mb-2">Health Check (Server-side)</h3>

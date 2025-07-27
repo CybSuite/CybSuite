@@ -9,11 +9,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MoreHorizontal, Trash2, Download, Eye, Pencil, Search, X } from "lucide-react";
-import { 
-    DropdownMenu, 
-    DropdownMenuContent, 
-    DropdownMenuItem, 
-    DropdownMenuTrigger 
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import {
   type ColumnDef,
@@ -62,11 +62,11 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
     tableId = "default",
     initialColumnVisibility = {}
 }: CybsuiteTableProps<TData>) {
-    
+
     // Track if component is mounted to prevent SSR hydration issues
     const [isMounted, setIsMounted] = React.useState(false);
     const [hasAdvancedFilters, setHasAdvancedFilters] = React.useState(false);
-    
+
     // Use local state for table independence
     const [sorting, setSorting] = React.useState<SortingState>([]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -110,84 +110,84 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
                         switch (filter.operator) {
                             case 'contains':
                                 return String(cellValue || '').toLowerCase().includes(String(filterValueToUse || '').toLowerCase());
-                            
+
                             case 'does_not_contain':
                                 return !String(cellValue || '').toLowerCase().includes(String(filterValueToUse || '').toLowerCase());
-                            
+
                             case 'is':
                                 return String(cellValue || '').toLowerCase() === String(filterValueToUse || '').toLowerCase();
-                            
+
                             case 'is_not':
                                 return String(cellValue || '').toLowerCase() !== String(filterValueToUse || '').toLowerCase();
-                            
+
                             case 'is_empty':
                                 return !cellValue || String(cellValue).trim() === '';
-                            
+
                             case 'is_not_empty':
                                 return cellValue && String(cellValue).trim() !== '';
-                            
+
                             case 'equals':
                                 if (!filterValueToUse && filterValueToUse !== 0) return true;
                                 return Number(cellValue) === Number(filterValueToUse);
-                            
+
                             case 'not_equals':
                                 if (!filterValueToUse && filterValueToUse !== 0) return true;
                                 return Number(cellValue) !== Number(filterValueToUse);
-                            
+
                             case 'greater_than':
                                 if (!filterValueToUse && filterValueToUse !== 0) return true;
                                 return Number(cellValue) > Number(filterValueToUse);
-                            
+
                             case 'less_than':
                                 if (!filterValueToUse && filterValueToUse !== 0) return true;
                                 return Number(cellValue) < Number(filterValueToUse);
-                            
+
                             case 'greater_equal':
                                 if (!filterValueToUse && filterValueToUse !== 0) return true;
                                 return Number(cellValue) >= Number(filterValueToUse);
-                            
+
                             case 'less_equal':
                                 if (!filterValueToUse && filterValueToUse !== 0) return true;
                                 return Number(cellValue) <= Number(filterValueToUse);
-                            
+
                             case 'has_any_of':
                                 if (!Array.isArray(filterValueToUse) || filterValueToUse.length === 0) return true;
-                                
+
                                 // Handle many-to-many relations: extract IDs from objects
                                 let cellValues: any[] = [];
                                 if (Array.isArray(cellValue)) {
-                                    cellValues = cellValue.map((item: any) => 
+                                    cellValues = cellValue.map((item: any) =>
                                         typeof item === 'object' && item !== null && 'id' in item ? String(item.id) : String(item)
                                     );
                                 } else if (cellValue) {
                                     const extractedValue = typeof cellValue === 'object' && cellValue !== null && 'id' in cellValue ? String(cellValue.id) : String(cellValue);
                                     cellValues = [extractedValue];
                                 }
-                                
+
                                 // Ensure filter values are also strings for consistent comparison
                                 const filterValuesAsStrings = filterValueToUse.map((fv: any) => String(fv));
-                                
+
                                 return filterValuesAsStrings.some((fv: string) => cellValues.includes(fv));
-                            
+
                             case 'has_none_of':
                                 if (!Array.isArray(filterValueToUse) || filterValueToUse.length === 0) return true;
-                                
+
                                 // Handle many-to-many relations: extract IDs from objects
                                 let cellValues2: any[] = [];
                                 if (Array.isArray(cellValue)) {
-                                    cellValues2 = cellValue.map((item: any) => 
+                                    cellValues2 = cellValue.map((item: any) =>
                                         typeof item === 'object' && item !== null && 'id' in item ? String(item.id) : String(item)
                                     );
                                 } else if (cellValue) {
                                     const extractedValue = typeof cellValue === 'object' && cellValue !== null && 'id' in cellValue ? String(cellValue.id) : String(cellValue);
                                     cellValues2 = [extractedValue];
                                 }
-                                
+
                                 // Ensure filter values are also strings for consistent comparison
                                 const filterValuesAsStrings2 = filterValueToUse.map((fv: any) => String(fv));
-                                
+
                                 return !filterValuesAsStrings2.some((fv: string) => cellValues2.includes(fv));
-                            
+
                             case 'is_on':
                                 if (!filterValueToUse) return true;
                                 try {
@@ -197,7 +197,7 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
                                 } catch {
                                     return false;
                                 }
-                            
+
                             case 'is_before':
                                 if (!filterValueToUse) return true;
                                 try {
@@ -205,7 +205,7 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
                                 } catch {
                                     return false;
                                 }
-                            
+
                             case 'is_after':
                                 if (!filterValueToUse) return true;
                                 try {
@@ -213,7 +213,7 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
                                 } catch {
                                     return false;
                                 }
-                            
+
                             case 'is_between':
                                 if (!filterValueToUse || typeof filterValueToUse !== 'object' || !filterValueToUse.start || !filterValueToUse.end) return true;
                                 try {
@@ -224,7 +224,7 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
                                 } catch {
                                     return false;
                                 }
-                            
+
                             default:
                                 // Unknown operator, return true to avoid filtering out rows
                                 console.warn(`Unknown filter operator: ${filter.operator}`);
@@ -256,9 +256,9 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
         // Handle regular string search (global search)
         if (typeof filterValue === 'string') {
             const searchValue = filterValue.toLowerCase();
-            
+
             // Search across all visible columns
-            return Object.values(row.original).some((value: any) => 
+            return Object.values(row.original).some((value: any) =>
                 String(value || '').toLowerCase().includes(searchValue)
             );
         }
@@ -285,7 +285,7 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
     // Default columns if none provided
     const defaultColumns = React.useMemo<ColumnDef<TData>[]>(() => {
         if (data.length === 0) return [];
-        
+
         const sampleRow = data[0];
         return Object.keys(sampleRow).map((key) => {
             const title = key.charAt(0).toUpperCase() + key.slice(1);
@@ -345,7 +345,7 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
         header: () => <div className="w-10" />,
         cell: ({ row }) => {
             const rowData = row.original;
-            
+
             return (
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -363,7 +363,7 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
                             <Pencil className="mr-2 h-4 w-4" />
                             Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem 
+                        <DropdownMenuItem
                             onClick={() => onRowAction?.("delete", [rowData])}
                             className="text-destructive"
                         >
@@ -382,17 +382,17 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
     // Final columns array
     const columns = React.useMemo(() => {
         const cols: ColumnDef<TData>[] = [];
-        
+
         if (enableRowSelection) {
             cols.push(selectionColumn);
         }
-        
+
         cols.push(...(providedColumns || defaultColumns));
-        
+
         if (onRowAction) {
             cols.push(actionsColumn);
         }
-        
+
         return cols;
     }, [providedColumns, defaultColumns, enableRowSelection, selectionColumn, onRowAction, actionsColumn]);
 
@@ -442,7 +442,7 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
         // Check if globalFilter is a string (regular search) or object (advanced filters)
         const searchValue = typeof globalFilter === 'string' ? globalFilter : '';
         const hasAdvancedFiltersActive = globalFilter && typeof globalFilter === 'object' && globalFilter.advancedFilters;
-        
+
         return (
             <div className="flex items-center space-x-2">
                 <div className="relative">
@@ -478,20 +478,20 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
         <div className="flex items-center justify-between w-full">
             <div className="flex flex-1 items-center space-x-2">
                 {enableGlobalSearch && globalSearchInput}
-                
+
                 <div className="ml-auto">
                     {enableFiltering && (
-                        <LocalFilterMenu 
+                        <LocalFilterMenu
                             ref={advancedFilterRef}
-                            table={table} 
+                            table={table}
                             onFiltersChange={setHasAdvancedFilters}
                         />
                     )}
-                    
+
                     {enableSorting && (
                         <LocalSortList table={table} sorting={sorting} onSortingChange={setSorting} />
                     )}
-                    
+
                     {isMounted && (sorting.length > 0 || columnFilters.length > 0 || globalFilter || hasAdvancedFilters) && (
                         <Button
                             variant="outline"

@@ -7,7 +7,7 @@ export default function PlaceholderPage() {
           This feature is coming soon
         </p>
       </div>
-      
+
       <div className="rounded-lg border bg-card p-6">
         <h3 className="font-semibold">Under Development</h3>
         <p className="text-sm text-muted-foreground mt-2">

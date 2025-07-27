@@ -35,7 +35,7 @@ const mockData: SecurityFinding[] = [
         score: 9.5,
     },
     {
-        id: "2", 
+        id: "2",
         title: "Outdated SSL certificate on main server",
         severity: "high",
         status: "in-progress",
@@ -90,7 +90,7 @@ const mockData: SecurityFinding[] = [
         score: 9.5,
     },
     {
-        id: "7", 
+        id: "7",
         title: "Outdated SSL certificate on main server",
         severity: "high",
         status: "in-progress",
@@ -192,7 +192,7 @@ const mockData: SecurityFinding[] = [
 
 const severityColors = {
     critical: "destructive",
-    high: "destructive", 
+    high: "destructive",
     medium: "default",
     low: "secondary",
 } as const;
@@ -259,7 +259,7 @@ export default function CybsuiteTableExample() {
             enableSorting: true,
         },
         {
-            id: "status", 
+            id: "status",
             accessorKey: "status",
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Status" />
@@ -287,7 +287,7 @@ export default function CybsuiteTableExample() {
         },
         {
             id: "assignee",
-            accessorKey: "assignee", 
+            accessorKey: "assignee",
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Assignee" />
             ),
@@ -378,7 +378,7 @@ export default function CybsuiteTableExample() {
     const handleRowAction = (action: string, rows: SecurityFinding[]) => {
         const rowIds = rows.map(row => row.id).join(", ");
         let message = "";
-        
+
         switch (action) {
             case "view":
                 message = `Viewing finding: ${rows[0]?.title}`;
@@ -395,9 +395,9 @@ export default function CybsuiteTableExample() {
             default:
                 message = `${action} action performed on ${rows.length} finding(s)`;
         }
-        
+
         setNotifications(prev => [...prev, message]);
-        
+
         // Auto-remove notification after 3 seconds
         setTimeout(() => {
             setNotifications(prev => prev.slice(1));

@@ -2,7 +2,7 @@ def serialize_model(cyberdb_schema, item, table_name):
     """Serialize a Django model instance"""
     if cyberdb_schema is None:
         return {}
-    
+
     result = {}
     table_schema = cyberdb_schema[table_name]
 
@@ -19,7 +19,7 @@ def serialize_model(cyberdb_schema, item, table_name):
                     }
 
             elif field_description.is_many_to_many_field():
-                if value and hasattr(value, 'exists') and value.exists():
+                if value and hasattr(value, "exists") and value.exists():
                     value = [
                         {
                             "id": related_item.id,

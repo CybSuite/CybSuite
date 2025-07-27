@@ -12,7 +12,7 @@ export default function NotFound() {
           The requested model does not exist in the current schema.
         </p>
       </div>
-      
+
       <div className="rounded-lg border bg-card p-6">
         <div className="text-center space-y-4">
           <h2 className="text-xl font-semibold">What you can do:</h2>
@@ -21,7 +21,7 @@ export default function NotFound() {
             <li>• Verify the model exists in your schema</li>
             <li>• Make sure your backend is properly configured</li>
           </ul>
-          
+
           <div className="pt-4">
             <Button asChild>
               <Link href="/data">

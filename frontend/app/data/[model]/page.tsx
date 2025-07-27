@@ -11,14 +11,14 @@ interface ModelPageProps {
 
 export default async function ModelPage({ params }: ModelPageProps) {
   const { model } = await params;
-  
+
   // Get cookies from Next.js headers
   const cookieStore = await cookies();
   const cookieHeader = cookieStore.toString();
-  
+
   // Check if the model exists by fetching schema names
   const schemaResponse = await serverApi.schema.getSchemaNames(cookieHeader);
-  
+
   if (schemaResponse.error || !schemaResponse.data) {
     // If we can't fetch schema names, show an error
     return (
@@ -34,7 +34,7 @@ export default async function ModelPage({ params }: ModelPageProps) {
       </div>
     );
   }
-  
+
   // Check if the model exists in the available schema names
   const availableModels = schemaResponse.data;
   if (!availableModels.includes(model)) {
@@ -47,7 +47,7 @@ export default async function ModelPage({ params }: ModelPageProps) {
     serverApi.schema.getEntitySchema(model, cookieHeader),
     serverApi.data.getEntityData(model, { skip: 0, limit: 10 }, cookieHeader),
   ]);
-  
+
   return (
     <div className="space-y-6">
       <div>
@@ -58,7 +58,7 @@ export default async function ModelPage({ params }: ModelPageProps) {
           Manage and view {model.replace(/_/g, ' ')} data with advanced filtering and sorting
         </p>
       </div>
-      
+
       {modelSchemaResponse.error || initialDataResponse.error ? (
         <div className="rounded-lg border bg-card p-6">
           <h3 className="font-semibold mb-4 text-red-600">Error Loading Data</h3>

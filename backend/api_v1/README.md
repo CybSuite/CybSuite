@@ -75,8 +75,8 @@ This endpoint provides lightweight API access for fetching entity records format
 **Example:**
 ```javascript
 // Get searchable control_definition options
-const options = await api.data.getEntityOptions('control_definition', { 
-  limit: 50, 
-  search: 'security' 
+const options = await api.data.getEntityOptions('control_definition', {
+  limit: 50,
+  search: 'security'
 });
 ```

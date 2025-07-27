@@ -2,7 +2,7 @@ import { FieldSchema, ColumnTypeInfo, ColumnVariant } from '@/app/types/Data';
 
 /**
  * Parse Python type annotation to determine column type information
- * 
+ *
  * Examples of annotations:
  * - "<class 'str'>" -> text
  * - "<class 'int'>" -> number
@@ -15,7 +15,7 @@ import { FieldSchema, ColumnTypeInfo, ColumnVariant } from '@/app/types/Data';
  */
 export function parseFieldAnnotation(field: FieldSchema): ColumnTypeInfo {
   const annotation = field.annotation.trim();
-  
+
   // First check if this field has choices - if so, it's a select type regardless of annotation
   if (field.choices && Array.isArray(field.choices) && field.choices.length > 0) {
     return {
@@ -25,15 +25,15 @@ export function parseFieldAnnotation(field: FieldSchema): ColumnTypeInfo {
       baseType: 'string'
     };
   }
-  
+
   // Check for set/list collections
   const setMatch = annotation.match(/^set\[(.+)\]$/);
   const listMatch = annotation.match(/^list\[(.+)\]$/);
-  
+
   if (setMatch || listMatch) {
     const innerType = setMatch?.[1] || listMatch?.[1] || '';
     const isArray = true;
-    
+
     // Check if it's a relation
     const entityMatch = innerType.match(/Entity\((.+)\)/);
     if (entityMatch) {
@@ -45,7 +45,7 @@ export function parseFieldAnnotation(field: FieldSchema): ColumnTypeInfo {
         referencedEntity: entityMatch[1]
       };
     }
-    
+
     // Handle list of primitive types
     const primitiveType = parseBasicType(innerType);
     return {
@@ -55,7 +55,7 @@ export function parseFieldAnnotation(field: FieldSchema): ColumnTypeInfo {
       baseType: primitiveType.baseType
     };
   }
-  
+
   // Check for single entity relations
   const entityMatch = annotation.match(/Entity\((.+)\)/);
   if (entityMatch) {
@@ -67,7 +67,7 @@ export function parseFieldAnnotation(field: FieldSchema): ColumnTypeInfo {
       referencedEntity: entityMatch[1]
     };
   }
-  
+
   // Check for class annotations like "<class 'str'>"
   const classMatch = annotation.match(/<class '(.+)'>/);
   if (classMatch) {
@@ -78,7 +78,7 @@ export function parseFieldAnnotation(field: FieldSchema): ColumnTypeInfo {
       isRelation: false
     };
   }
-  
+
   // Fallback to parsing as basic type
   return {
     ...parseBasicType(annotation),
@@ -89,25 +89,25 @@ export function parseFieldAnnotation(field: FieldSchema): ColumnTypeInfo {
 
 function parseBasicType(typeStr: string): { variant: ColumnVariant; baseType: string } {
   const lowerType = typeStr.toLowerCase();
-  
+
   if (lowerType.includes('str') || lowerType.includes('string')) {
     return { variant: 'text', baseType: 'string' };
   }
-  
-  if (lowerType.includes('int') || lowerType.includes('integer') || 
+
+  if (lowerType.includes('int') || lowerType.includes('integer') ||
       lowerType.includes('float') || lowerType.includes('decimal') ||
       lowerType.includes('number')) {
     return { variant: 'number', baseType: 'number' };
   }
-  
+
   if (lowerType.includes('bool') || lowerType.includes('boolean')) {
     return { variant: 'boolean', baseType: 'boolean' };
   }
-  
+
   if (lowerType.includes('date') || lowerType.includes('time')) {
     return { variant: 'date', baseType: 'date' };
   }
-  
+
   // Default fallback
   return { variant: 'text', baseType: 'string' };
 }
@@ -134,7 +134,7 @@ export function formatFieldValue(value: any, typeInfo: ColumnTypeInfo): string {
   if (value === null || value === undefined) {
     return '—';
   }
-  
+
   if (typeInfo.isArray && Array.isArray(value)) {
     if (typeInfo.isRelation) {
       // For relation arrays (many-to-many), look for repr field first, then fallback to other identifiers
@@ -148,26 +148,26 @@ export function formatFieldValue(value: any, typeInfo: ColumnTypeInfo): string {
       return value.map(item => String(item)).join(', ');
     }
   }
-  
+
   // Handle single relation objects (one-to-many or foreign key relations)
   if (typeInfo.isRelation && typeof value === 'object' && value !== null) {
     return value.repr || value.name || value.title || value.id || String(value);
   }
-  
+
   switch (typeInfo.variant) {
     case 'boolean':
       return value ? 'Yes' : 'No';
-      
+
     case 'number':
       return Number(value).toLocaleString();
-      
+
     case 'date':
       try {
         return new Date(value).toLocaleDateString();
       } catch {
         return String(value);
       }
-      
+
     default:
       return String(value);
   }
@@ -183,26 +183,26 @@ export function getFilterOptions(field: FieldSchema, typeInfo: ColumnTypeInfo): 
       { label: 'No', value: 'false' }
     ];
   }
-  
+
   if (field.choices && Array.isArray(field.choices)) {
     return field.choices.map(choice => ({
       label: String(choice),
       value: String(choice)
     }));
   }
-  
+
   if (field.examples && Array.isArray(field.examples)) {
     return field.examples.map(example => ({
       label: String(example),
       value: String(example)
     }));
   }
-  
+
   // For relations, we'll fetch options dynamically
   if (typeInfo.isRelation && typeInfo.referencedEntity) {
     return []; // Will be populated dynamically
   }
-  
+
   return undefined;
 }
 
@@ -212,21 +212,21 @@ export function getFilterOptions(field: FieldSchema, typeInfo: ColumnTypeInfo): 
 export async function fetchRelationOptions(entity: string, api: any): Promise<Array<{ label: string; value: string }>> {
   try {
     const response = await api.data.getEntityOptions(entity, { limit: 100 }); // Get first 100 options
-    
+
     if (response.error) {
       console.warn(`API error for entity ${entity}:`, response.error);
       return [];
     }
-    
+
     if (!response.data || !Array.isArray(response.data) || response.data.length === 0) {
       return [];
     }
-    
+
     const options = response.data.map((item: { id: string | number; repr: string }) => ({
       label: item.repr || `Item ${item.id}`,
       value: String(item.id)
     }));
-    
+
     return options;
   } catch (error) {
     console.error(`Exception while fetching options for entity ${entity}:`, error);

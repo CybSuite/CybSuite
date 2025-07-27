@@ -1,9 +1,9 @@
 import * as ComboboxPrimitive from "@diceui/combobox";
 import { Check, ChevronDown, X } from "lucide-react";
 import * as React from "react";
- 
+
 import { cn } from "@/lib/utils";
- 
+
 const Combobox = React.forwardRef<
   React.ComponentRef<typeof ComboboxPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof ComboboxPrimitive.Root>
@@ -16,7 +16,7 @@ const Combobox = React.forwardRef<
   />
 )) as ComboboxPrimitive.ComboboxRootComponentProps;
 Combobox.displayName = ComboboxPrimitive.Root.displayName;
- 
+
 const ComboboxLabel = React.forwardRef<
   React.ComponentRef<typeof ComboboxPrimitive.Label>,
   React.ComponentPropsWithoutRef<typeof ComboboxPrimitive.Label>
@@ -29,7 +29,7 @@ const ComboboxLabel = React.forwardRef<
   />
 ));
 ComboboxLabel.displayName = ComboboxPrimitive.Label.displayName;
- 
+
 const ComboboxAnchor = React.forwardRef<
   React.ComponentRef<typeof ComboboxPrimitive.Anchor>,
   React.ComponentPropsWithoutRef<typeof ComboboxPrimitive.Anchor>
@@ -45,7 +45,7 @@ const ComboboxAnchor = React.forwardRef<
   />
 ));
 ComboboxAnchor.displayName = ComboboxPrimitive.Anchor.displayName;
- 
+
 const ComboboxInput = React.forwardRef<
   React.ComponentRef<typeof ComboboxPrimitive.Input>,
   React.ComponentPropsWithoutRef<typeof ComboboxPrimitive.Input>
@@ -61,7 +61,7 @@ const ComboboxInput = React.forwardRef<
   />
 ));
 ComboboxInput.displayName = ComboboxPrimitive.Input.displayName;
- 
+
 const ComboboxTrigger = React.forwardRef<
   React.ComponentRef<typeof ComboboxPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof ComboboxPrimitive.Trigger>
@@ -79,7 +79,7 @@ const ComboboxTrigger = React.forwardRef<
   </ComboboxPrimitive.Trigger>
 ));
 ComboboxTrigger.displayName = ComboboxPrimitive.Trigger.displayName;
- 
+
 const ComboboxCancel = React.forwardRef<
   React.ComponentRef<typeof ComboboxPrimitive.Cancel>,
   React.ComponentPropsWithoutRef<typeof ComboboxPrimitive.Cancel>
@@ -95,7 +95,7 @@ const ComboboxCancel = React.forwardRef<
   />
 ));
 ComboboxCancel.displayName = ComboboxPrimitive.Cancel.displayName;
- 
+
 const ComboboxBadgeList = React.forwardRef<
   React.ComponentRef<typeof ComboboxPrimitive.BadgeList>,
   React.ComponentPropsWithoutRef<typeof ComboboxPrimitive.BadgeList>
@@ -108,7 +108,7 @@ const ComboboxBadgeList = React.forwardRef<
   />
 ));
 ComboboxBadgeList.displayName = ComboboxPrimitive.BadgeList.displayName;
- 
+
 const ComboboxBadgeItem = React.forwardRef<
   React.ComponentRef<typeof ComboboxPrimitive.BadgeItem>,
   React.ComponentPropsWithoutRef<typeof ComboboxPrimitive.BadgeItem>
@@ -134,7 +134,7 @@ const ComboboxBadgeItem = React.forwardRef<
   </ComboboxPrimitive.BadgeItem>
 ));
 ComboboxBadgeItem.displayName = ComboboxPrimitive.BadgeItem.displayName;
- 
+
 const ComboboxContent = React.forwardRef<
   React.ComponentRef<typeof ComboboxPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof ComboboxPrimitive.Content>
@@ -155,7 +155,7 @@ const ComboboxContent = React.forwardRef<
   </ComboboxPrimitive.Portal>
 ));
 ComboboxContent.displayName = ComboboxPrimitive.Content.displayName;
- 
+
 const ComboboxLoading = React.forwardRef<
   React.ComponentRef<typeof ComboboxPrimitive.Loading>,
   React.ComponentPropsWithoutRef<typeof ComboboxPrimitive.Loading>
@@ -170,7 +170,7 @@ const ComboboxLoading = React.forwardRef<
   </ComboboxPrimitive.Loading>
 ));
 ComboboxLoading.displayName = ComboboxPrimitive.Loading.displayName;
- 
+
 const ComboboxEmpty = React.forwardRef<
   React.ComponentRef<typeof ComboboxPrimitive.Empty>,
   React.ComponentPropsWithoutRef<typeof ComboboxPrimitive.Empty>
@@ -183,7 +183,7 @@ const ComboboxEmpty = React.forwardRef<
   />
 ));
 ComboboxEmpty.displayName = ComboboxPrimitive.Empty.displayName;
- 
+
 const ComboboxGroup = React.forwardRef<
   React.ComponentRef<typeof ComboboxPrimitive.Group>,
   React.ComponentPropsWithoutRef<typeof ComboboxPrimitive.Group>
@@ -196,7 +196,7 @@ const ComboboxGroup = React.forwardRef<
   />
 ));
 ComboboxGroup.displayName = ComboboxPrimitive.Group.displayName;
- 
+
 const ComboboxGroupLabel = React.forwardRef<
   React.ComponentRef<typeof ComboboxPrimitive.GroupLabel>,
   React.ComponentPropsWithoutRef<typeof ComboboxPrimitive.GroupLabel>
@@ -212,7 +212,7 @@ const ComboboxGroupLabel = React.forwardRef<
   />
 ));
 ComboboxGroupLabel.displayName = ComboboxPrimitive.GroupLabel.displayName;
- 
+
 const ComboboxItem = React.forwardRef<
   React.ComponentRef<typeof ComboboxPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof ComboboxPrimitive.Item> & {
@@ -241,7 +241,7 @@ const ComboboxItem = React.forwardRef<
   </ComboboxPrimitive.Item>
 ));
 ComboboxItem.displayName = ComboboxPrimitive.Item.displayName;
- 
+
 const ComboboxSeparator = React.forwardRef<
   React.ComponentRef<typeof ComboboxPrimitive.Separator>,
   React.ComponentPropsWithoutRef<typeof ComboboxPrimitive.Separator>
@@ -254,7 +254,7 @@ const ComboboxSeparator = React.forwardRef<
   />
 ));
 ComboboxSeparator.displayName = ComboboxPrimitive.Separator.displayName;
- 
+
 export {
   Combobox,
   ComboboxAnchor,

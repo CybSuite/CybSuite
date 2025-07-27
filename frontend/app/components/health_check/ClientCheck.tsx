@@ -9,7 +9,7 @@ export default function ClientCheck() {
   const [testData, setTestData] = useState('');
   const [postResponse, setPostResponse] = useState<TestResponse | null>(null);
   const [systemInfo, setSystemInfo] = useState<SystemInfoResponse | null>(null);
-  
+
   // Use the custom hook to fetch health check data on the client
   const { data: healthData, loading: healthLoading, error: healthError, refetch: refetchHealth } = useApi<HealthCheckResponse>(
     () => api.health.check(),
@@ -46,7 +46,7 @@ export default function ClientCheck() {
   return (
     <div className="p-6 bg-blue-50 rounded-lg mb-6">
       <h2 className="text-xl font-semibold mb-4">🖥️ Client-Side Data (CSR) - Health App</h2>
-      
+
       {/* Health Check Section */}
       <div className="mb-6 p-4 bg-white rounded">
         <h3 className="font-semibold mb-2">Health Check (Client-side)</h3>
@@ -54,7 +54,7 @@ export default function ClientCheck() {
         {healthError && (
           <div className="text-red-600">
             <p>❌ Error: {healthError}</p>
-            <button 
+            <button
               onClick={refetchHealth}
               className="mt-2 px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700"
             >
@@ -77,24 +77,24 @@ export default function ClientCheck() {
       {/* Interactive API Test Section */}
       <div className="p-4 bg-white rounded mb-4">
         <h3 className="font-semibold mb-3">Interactive Health API Tests</h3>
-        
+
         <div className="space-y-3">
           <div className="flex gap-3 flex-wrap">
-            <button 
+            <button
               onClick={handleTestGet}
               className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
             >
               Test GET Request
             </button>
-            
-            <button 
+
+            <button
               onClick={handleTestPost}
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
             >
               Test POST Request
             </button>
 
-            <button 
+            <button
               onClick={handleSystemInfo}
               className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm"
             >

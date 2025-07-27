@@ -7,11 +7,11 @@ import { DataTableColumnHeader } from "@/components/data-table/data-table-column
 import { RelationLink } from "@/app/components/data/RelationLink";
 import { api } from "@/app/lib/api";
 import { EntityRecord, EntitySchema } from "@/app/types/Data";
-import { 
-  parseFieldAnnotation, 
-  isHiddenInitially, 
-  getFieldDisplayName, 
-  formatFieldValue, 
+import {
+  parseFieldAnnotation,
+  isHiddenInitially,
+  getFieldDisplayName,
+  formatFieldValue,
   getFilterOptions,
   fetchRelationOptions
 } from "@/app/lib/schema-utils";
@@ -23,23 +23,23 @@ import { Skeleton } from "@/components/ui/skeleton";
 const relationSortingFn: SortingFn<EntityRecord> = (rowA, rowB, columnId) => {
   const getRelationString = (value: any): string => {
     if (!value) return '';
-    
+
     if (Array.isArray(value)) {
       // For many-to-many relations, join all repr values
-      return value.map(item => 
+      return value.map(item =>
         typeof item === 'object' && item !== null && 'repr' in item ? item.repr : String(item)
       ).join(', ');
     } else if (typeof value === 'object' && value !== null && 'repr' in value) {
       // For single relations, use the repr value
       return value.repr;
     }
-    
+
     return String(value);
   };
 
   const aValue = getRelationString(rowA.getValue(columnId));
   const bValue = getRelationString(rowB.getValue(columnId));
-  
+
   return aValue.localeCompare(bValue);
 };
 
@@ -55,10 +55,10 @@ interface ApiResponse<T> {
   status: number;
 }
 
-export default function ModelDataTable({ 
-  model, 
-  initialData = [], 
-  initialSchema, 
+export default function ModelDataTable({
+  model,
+  initialData = [],
+  initialSchema,
 }: ModelDataTableProps) {
   const [data, setData] = React.useState<EntityRecord[]>(initialData);
   const [schema, setSchema] = React.useState<EntitySchema | undefined>(initialSchema);
@@ -77,7 +77,7 @@ export default function ModelDataTable({
   const fetchSchema = React.useCallback(async () => {
     try {
       setError(null);
-      
+
       // Fetch schema if not provided
       if (!schema) {
         const schemaResponse = await api.schema.getEntitySchema(model);
@@ -94,7 +94,7 @@ export default function ModelDataTable({
   // Fetch relation options for fields that reference other entities
   const fetchRelationOptionsForSchema = React.useCallback(async (schemaData: EntitySchema) => {
     const optionsToFetch: Record<string, string> = {};
-    
+
     // Find all relation fields that need options
     Object.values(schemaData.fields).forEach(field => {
       const typeInfo = parseFieldAnnotation(field);
@@ -106,8 +106,8 @@ export default function ModelDataTable({
     // Skip if no relation fields or if we already have options for all fields
     const fieldNames = Object.keys(optionsToFetch);
     if (fieldNames.length === 0) return;
-    
-    const alreadyHaveAllOptions = fieldNames.every(fieldName => 
+
+    const alreadyHaveAllOptions = fieldNames.every(fieldName =>
       relationOptions[fieldName] && relationOptions[fieldName].length > 0
     );
     if (alreadyHaveAllOptions) return;
@@ -118,7 +118,7 @@ export default function ModelDataTable({
       if (relationOptions[fieldName] && relationOptions[fieldName].length > 0) {
         return { fieldName, options: relationOptions[fieldName] };
       }
-      
+
       const options = await fetchRelationOptions(referencedEntity, api);
       return { fieldName, options };
     });
@@ -126,11 +126,11 @@ export default function ModelDataTable({
     try {
       const results = await Promise.all(fetchPromises);
       const newRelationOptions: Record<string, Array<{ label: string; value: string }>> = {};
-      
+
       results.forEach(({ fieldName, options }) => {
         newRelationOptions[fieldName] = options;
       });
-      
+
       setRelationOptions(prev => ({ ...prev, ...newRelationOptions }));
     } catch (err) {
       console.warn('Failed to fetch some relation options:', err);
@@ -170,7 +170,7 @@ export default function ModelDataTable({
       const typeInfo = parseFieldAnnotation(fieldSchema);
       const displayName = getFieldDisplayName(fieldSchema);
       const staticOptions = getFilterOptions(fieldSchema, typeInfo);
-      
+
       // Get dynamic options for relation fields
       const dynamicOptions = typeInfo.isRelation ? relationOptions[fieldName] : undefined;
       const filterOptions = dynamicOptions || staticOptions;
@@ -183,20 +183,20 @@ export default function ModelDataTable({
         ),
         cell: ({ row }) => {
           const value = row.getValue(fieldName);
-          
+
           // Special handling for relations with links
           if (typeInfo.isRelation && typeInfo.referencedEntity) {
             return (
-              <RelationLink 
+              <RelationLink
                 value={value}
                 entityName={typeInfo.referencedEntity}
                 isArray={typeInfo.isArray}
               />
             );
           }
-          
+
           const formattedValue = formatFieldValue(value, typeInfo);
-          
+
           // Add tooltip for long text and truncate
           if (typeInfo.variant === 'text' && formattedValue.length > 50) {
             return (
@@ -205,18 +205,18 @@ export default function ModelDataTable({
               </div>
             );
           }
-          
+
           return <span>{formattedValue}</span>;
         },
         meta: {
           label: displayName,
           placeholder: `Search ${displayName.toLowerCase()}...`,
-          variant: typeInfo.isRelation ? 
-                   (typeInfo.isArray ? 'multiSelect' : 'select') : 
+          variant: typeInfo.isRelation ?
+                   (typeInfo.isArray ? 'multiSelect' : 'select') :
                    typeInfo.variant,
           options: filterOptions,
         },
-        enableColumnFilter: 
+        enableColumnFilter:
           // Enable filtering for:
           fieldSchema.in_filter_query ||           // Explicitly marked as filterable
           typeInfo.variant === 'boolean' ||        // Boolean fields
@@ -226,7 +226,7 @@ export default function ModelDataTable({
           typeInfo.variant === 'date',             // Date fields for range filtering
         enableSorting: true, // Enable sorting for all columns including relations
         ...(typeInfo.isRelation && { sortingFn: relationSortingFn }), // Only add sortingFn for relations
-        size: typeInfo.variant === 'date' ? 120 : 
+        size: typeInfo.variant === 'date' ? 120 :
               typeInfo.variant === 'number' ? 100 :
               typeInfo.variant === 'boolean' ? 80 :
               typeInfo.isRelation ? 150 : undefined,
@@ -239,7 +239,7 @@ export default function ModelDataTable({
     if (schema && schema.fields) {
       const newColumns = generateColumns();
       setColumns(newColumns);
-      
+
       // Force table re-render by updating the key
       const newTableKey = `${model}-table-${Date.now()}-${Object.keys(relationOptions).length}`;
       setTableKey(newTableKey);
@@ -296,7 +296,7 @@ export default function ModelDataTable({
   // Handle row actions
   const handleRowAction = React.useCallback(async (action: string, rows: EntityRecord[]) => {
     console.log(`Action: ${action}`, rows);
-    
+
     switch (action) {
       case 'view':
         console.log('View rows:', rows);

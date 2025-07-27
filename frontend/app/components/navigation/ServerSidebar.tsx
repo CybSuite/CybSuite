@@ -17,23 +17,23 @@ export async function ServerSidebar({ className }: ServerSidebarProps) {
     // Get cookies from Next.js headers
     const cookieStore = await cookies();
     const cookieHeader = cookieStore.toString();
-    
+
     // Direct fetch call to avoid module loading issues
     const serverUrl = process.env.DJANGO_API_URL || 'http://backend:8000';
     const url = `${serverUrl}/api/v1/nav_links/`;
-    
+
     const response = await fetch(url, {
       headers: {
         'Content-Type': 'application/json',
         ...(cookieHeader && { 'Cookie': cookieHeader }),
       },
     });
-    
+
     if (!response.ok) {
       console.error('HTTP error! status:', response.status);
       return <Sidebar sidebarData={defaultSidebarData} className={className} />;
     }
-    
+
     const data = await response.json();
     return <Sidebar sidebarData={data.sidebar} className={className} />;
   } catch (error) {

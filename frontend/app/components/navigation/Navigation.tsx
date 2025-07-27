@@ -44,12 +44,12 @@ export function Navigation({ navigationData }: NavigationProps) {
     if (pathname === itemUrl) {
       return true;
     }
-    
+
     // Handle nested paths (e.g., /data/hosts should match /data/hosts/123)
     if (pathname.startsWith(itemUrl + '/')) {
       return true;
     }
-    
+
     return false;
   };
 
@@ -61,18 +61,18 @@ export function Navigation({ navigationData }: NavigationProps) {
   const handleAppSwitch = (appName: string) => {
     if (isLoading) return;
     setIsLoading(true);
-    
+
     // Remove existing cookies
     cookieUtils.remove('nav_app');
     cookieUtils.remove('nav_app', { domain: window.location.hostname });
-    
+
     // Set new cookie
     cookieUtils.set('nav_app', appName, {
       path: '/',
       sameSite: 'lax',
       maxAge: 365 * 24 * 60 * 60 // 1 year
     });
-    
+
     // Use a more reliable page refresh
     window.location.reload();
   };
@@ -117,16 +117,16 @@ export function Navigation({ navigationData }: NavigationProps) {
             CybSuite
           </Link>
         </div>
-        
+
         {/* Main Navigation */}
         <NavigationMenu className="mx-6">
           <NavigationMenuList>
             {navigationData.navbar_items.map((menuItem) => {
               const hasSelectedItem = hasActiveMenuItem(menuItem.items);
-              
+
               return (
                 <NavigationMenuItem key={menuItem.name}>
-                  <NavigationMenuTrigger 
+                  <NavigationMenuTrigger
                     className={cn(
                       "h-9 transition-colors",
                       hasSelectedItem && "bg-blue-300 text-accent-foreground font-semibold hover:bg-blue-400"
@@ -166,13 +166,13 @@ export function Navigation({ navigationData }: NavigationProps) {
             })}
           </NavigationMenuList>
         </NavigationMenu>
-        
+
         {/* App Switcher */}
         <div className="ml-auto flex items-center space-x-4">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 className="flex items-center space-x-2"
                 disabled={isLoading}
               >

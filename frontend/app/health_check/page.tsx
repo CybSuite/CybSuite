@@ -4,7 +4,7 @@ import ProductionStatus from '../components/health_check/ProductionStatus';
 
 export default function HealthCheck() {
   const isDevelopment = process.env.NODE_ENV === 'development';
-  
+
   return (
     <div className="min-h-screen bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
@@ -12,12 +12,12 @@ export default function HealthCheck() {
           <h1 className="text-3xl font-bold text-gray-900 mb-8 text-center">
             CybSuite - Frontend ↔ Backend Connection
           </h1>
-          
+
           {isDevelopment && (
             <div className="mb-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
               <h2 className="text-lg font-semibold mb-2">🔄 Development Mode</h2>
               <p className="text-sm text-gray-700">
-                This page demonstrates both server-side (SSR) and client-side (CSR) data fetching 
+                This page demonstrates both server-side (SSR) and client-side (CSR) data fetching
                 from the Django backend. These debug components are only visible in development mode.
               </p>
             </div>

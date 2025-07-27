@@ -6,7 +6,7 @@ interface SettingsSectionPageProps {
 
 export default function SettingsSectionPage({ params }: SettingsSectionPageProps) {
   const { section } = params;
-  
+
   return (
     <div className="space-y-6">
       <div>
@@ -17,7 +17,7 @@ export default function SettingsSectionPage({ params }: SettingsSectionPageProps
           Configure {section.replace(/_/g, ' ')} settings
         </p>
       </div>
-      
+
       <div className="rounded-lg border bg-card p-6">
         <h3 className="font-semibold mb-4">Configuration</h3>
         <p className="text-sm text-muted-foreground mb-4">
@@ -27,7 +27,7 @@ export default function SettingsSectionPage({ params }: SettingsSectionPageProps
           <p className="text-sm">Section: <code className="bg-background px-2 py-1 rounded">{section}</code></p>
         </div>
       </div>
-      
+
       {section === 'databases' && (
         <div className="space-y-4">
           <div className="rounded-lg border bg-card p-6">

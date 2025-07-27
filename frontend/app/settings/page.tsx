@@ -7,7 +7,7 @@ export default function SettingsPage() {
           Configure your CybSuite application
         </p>
       </div>
-      
+
       <div className="grid grid-cols-1 gap-6">
         <div className="rounded-lg border bg-card p-6">
           <h3 className="font-semibold mb-4">Database Configuration</h3>
@@ -25,7 +25,7 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
-        
+
         <div className="rounded-lg border bg-card p-6">
           <h3 className="font-semibold mb-4">Application Settings</h3>
           <p className="text-sm text-muted-foreground mb-4">

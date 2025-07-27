@@ -9,7 +9,7 @@ export async function fetchHealthCheck(): Promise<ApiResponse<HealthCheckRespons
   const urls = [
     `${baseUrl}/health/check/`,
   ];
-  
+
   for (const url of urls) {
     try {
       console.log('Trying server-side health check with URL:', url);
@@ -21,26 +21,26 @@ export async function fetchHealthCheck(): Promise<ApiResponse<HealthCheckRespons
         // Add timeout
         signal: AbortSignal.timeout(5000), // 5 second timeout
       })
-      
+
       console.log('Response status:', response.status);
       console.log('Response content-type:', response.headers.get('content-type'));
-      
+
       if (!response.ok) {
         const text = await response.text();
         console.error('Non-OK response:', text);
         continue; // Try next URL
       }
-      
+
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
         const text = await response.text();
         console.error('Non-JSON response:', text.substring(0, 200));
         continue; // Try next URL
       }
-      
+
       const data = await response.json();
       console.log('Successful health check response:', data);
-      
+
       return {
         data,
         error: undefined,
@@ -51,7 +51,7 @@ export async function fetchHealthCheck(): Promise<ApiResponse<HealthCheckRespons
       // Continue to next URL
     }
   }
-  
+
   // If all URLs failed
   return {
     data: undefined,
@@ -73,11 +73,11 @@ export async function fetchTestData(): Promise<ApiResponse<TestResponse>> {
   const urls = [
     `${baseUrl}/health/test/`,
   ];
-  
+
   for (const url of urls) {
     try {
       console.log('Trying server-side test fetch with URL:', url);
-      
+
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -85,16 +85,16 @@ export async function fetchTestData(): Promise<ApiResponse<TestResponse>> {
         },
         signal: AbortSignal.timeout(5000),
       });
-      
+
       if (!response.ok) {
         continue;
       }
-      
+
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
         continue;
       }
-      
+
       const data = await response.json();
       return {
         data,
@@ -105,7 +105,7 @@ export async function fetchTestData(): Promise<ApiResponse<TestResponse>> {
       console.error(`Failed to fetch test data from ${url}:`, error);
     }
   }
-  
+
   return {
     data: undefined,
     error: 'Failed to connect to Django health test endpoint from server-side.',
@@ -126,11 +126,11 @@ export async function fetchSystemInfo(): Promise<ApiResponse<SystemInfoResponse>
   const urls = [
     `${baseUrl}/health/system/`,
   ];
-  
+
   for (const url of urls) {
     try {
       console.log('Trying server-side system info fetch with URL:', url);
-      
+
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -138,16 +138,16 @@ export async function fetchSystemInfo(): Promise<ApiResponse<SystemInfoResponse>
         },
         signal: AbortSignal.timeout(5000),
       });
-      
+
       if (!response.ok) {
         continue;
       }
-      
+
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
         continue;
       }
-      
+
       const data = await response.json();
       return {
         data,
@@ -158,7 +158,7 @@ export async function fetchSystemInfo(): Promise<ApiResponse<SystemInfoResponse>
       console.error(`Failed to fetch system info from ${url}:`, error);
     }
   }
-  
+
   return {
     data: undefined,
     error: 'Failed to connect to Django health system endpoint from server-side.',
@@ -173,11 +173,11 @@ export async function postTestData(data: any): Promise<ApiResponse<TestResponse>
 
 // Generic server-side fetch function
 export async function serverFetch<T>(
-  endpoint: string, 
+  endpoint: string,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   const client = createServerApiClient();
-  
+
   switch (options.method?.toUpperCase()) {
     case 'POST':
       return client.post<T>(endpoint, options.body ? JSON.parse(options.body as string) : undefined);
@@ -201,7 +201,7 @@ export async function cachedServerFetch<T>(
   const client = createServerApiClient();
   const baseUrl = process.env.DJANGO_API_URL || 'http://backend:8000';
   const url = `${baseUrl}${endpoint}`;
-  
+
   const fetchOptions: RequestInit = {
     method: 'GET',
     headers: {

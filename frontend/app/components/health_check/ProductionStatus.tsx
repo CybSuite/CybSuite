@@ -17,12 +17,12 @@ export default function ProductionStatus() {
 
   const checkSystemHealth = async (): Promise<SystemStatus> => {
     const startTime = Date.now();
-    
+
     try {
       // Use a simple endpoint that should be available in production
       // We'll try the API root endpoint first, then fallback to a simple ping
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      
+
       const response = await fetch(`${baseUrl}/health/check/`, {
         method: 'GET',
         headers: {
@@ -33,9 +33,9 @@ export default function ProductionStatus() {
         // Don't send credentials in production health checks
         credentials: 'omit'
       });
-      
+
       const responseTime = Date.now() - startTime;
-      
+
       if (response.ok) {
         return {
           isOnline: true,
@@ -54,7 +54,7 @@ export default function ProductionStatus() {
     } catch (error) {
       const responseTime = Date.now() - startTime;
       console.error('System health check failed:', error);
-      
+
       // If the primary URL failed, try localhost as fallback for local testing
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       if (!baseUrl.includes('localhost')) {
@@ -65,7 +65,7 @@ export default function ProductionStatus() {
             signal: AbortSignal.timeout(3000),
             credentials: 'omit'
           });
-          
+
           if (fallbackResponse.ok) {
             return {
               isOnline: true,
@@ -78,7 +78,7 @@ export default function ProductionStatus() {
           console.error('Fallback health check also failed:', fallbackError);
         }
       }
-      
+
       return {
         isOnline: false,
         status: 'offline',
@@ -91,12 +91,12 @@ export default function ProductionStatus() {
   useEffect(() => {
     // Initial health check
     checkSystemHealth().then(setSystemStatus);
-    
+
     // Set up periodic health checks (every 30 seconds)
     const interval = setInterval(() => {
       checkSystemHealth().then(setSystemStatus);
     }, 30000);
-    
+
     return () => clearInterval(interval);
   }, []);
 
@@ -154,19 +154,19 @@ export default function ProductionStatus() {
       <p className="text-gray-600 mb-8">
         Your cybersecurity suite is running in production mode.
       </p>
-      
+
       <div className="space-y-4">
         <div className={`inline-flex items-center px-4 py-2 rounded-lg ${getStatusColor()}`}>
           <span className={`w-2 h-2 rounded-full mr-2 ${getStatusIcon()}`}></span>
           System Status: {getStatusText()}
         </div>
-        
+
         {systemStatus.lastChecked && (
           <p className="text-sm text-gray-500">
             Last checked: {systemStatus.lastChecked.toLocaleTimeString()}
           </p>
         )}
-        
+
         <button
           onClick={handleManualCheck}
           disabled={systemStatus.status === 'checking'}

@@ -9,7 +9,7 @@ import { Sortable, SortableContent, SortableItem, SortableItemHandle } from "@/c
 import { ArrowUpDown, ArrowUp, ArrowDown, GripVertical, X, Plus } from "lucide-react";
 
 interface LocalSortListProps<TData> {
-    table: any; 
+    table: any;
     sorting: any[];
     onSortingChange: any;
 }
@@ -18,7 +18,7 @@ interface LocalSortListProps<TData> {
 function LocalSortList<TData>({ table, sorting, onSortingChange }: LocalSortListProps<TData>) {
     const [open, setOpen] = React.useState(false);
     const [addColumnOpen, setAddColumnOpen] = React.useState(false);
-    
+
     const { columnLabels, columns } = React.useMemo(() => {
         const labels = new Map<string, string>();
         const sortingIds = new Set(sorting.map((s: any) => s.id));
@@ -84,11 +84,11 @@ function LocalSortList<TData>({ table, sorting, onSortingChange }: LocalSortList
             <PopoverContent className="w-80 p-0" align="end">
                 <div className="p-3">
                     <div className="text-sm font-medium mb-3">Sort by</div>
-                    
-                    <Sortable 
+
+                    <Sortable
                         value={sorting.map((s: any) => s.id)}
                         onValueChange={(newOrder: string[]) => {
-                            const newSorting = newOrder.map(id => 
+                            const newSorting = newOrder.map(id =>
                                 sorting.find((s: any) => s.id === id)
                             ).filter(Boolean);
                             onSortingChange(newSorting);
@@ -97,19 +97,19 @@ function LocalSortList<TData>({ table, sorting, onSortingChange }: LocalSortList
                         <SortableContent className="space-y-2">
                             {sorting.map((sort: any) => {
                                 const label = columnLabels.get(sort.id) ?? sort.id;
-                                
+
                                 return (
-                                    <SortableItem 
-                                        key={sort.id} 
+                                    <SortableItem
+                                        key={sort.id}
                                         value={sort.id}
                                         className="flex items-center gap-2 p-2 rounded-md border bg-background"
                                     >
                                         <SortableItemHandle>
                                             <GripVertical className="h-4 w-4 text-muted-foreground" />
                                         </SortableItemHandle>
-                                        
+
                                         <div className="flex-1 text-sm">{label}</div>
-                                        
+
                                         <Button
                                             variant="ghost"
                                             size="sm"
@@ -130,7 +130,7 @@ function LocalSortList<TData>({ table, sorting, onSortingChange }: LocalSortList
                                                 <ArrowUp className="h-3 w-3" />
                                             )}
                                         </Button>
-                                        
+
                                         <Button
                                             variant="ghost"
                                             size="sm"
@@ -148,7 +148,7 @@ function LocalSortList<TData>({ table, sorting, onSortingChange }: LocalSortList
                             })}
                         </SortableContent>
                     </Sortable>
-                    
+
                     <div className="flex gap-2 mt-4">
                         <Popover open={addColumnOpen} onOpenChange={setAddColumnOpen}>
                             <PopoverTrigger asChild>
@@ -189,7 +189,7 @@ function LocalSortList<TData>({ table, sorting, onSortingChange }: LocalSortList
                                 </div>
                             </PopoverContent>
                         </Popover>
-                        
+
                         <Button
                             variant="outline"
                             size="sm"
