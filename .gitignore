@@ -111,5 +111,6 @@ _BRAINSTORM/
 # mkdocs
 public/
 
-# VS Code
+# IDE Visual Studio Code
 *.code-workspace
+.vscode

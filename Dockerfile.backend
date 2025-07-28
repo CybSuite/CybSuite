@@ -1,0 +1,50 @@
+# Backend Dockerfile for development
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    python3-distutils \
+    libpq-dev \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install poetry
+RUN pip install poetry pipx
+
+# Copy poetry files
+COPY pyproject.toml README.md ./
+
+# Configure poetry to not create virtual environment
+RUN poetry config virtualenvs.create false
+
+# Copy source code
+COPY src/ ./src/
+
+# Install the cybsuite package in editable mode for development
+RUN pipx install -e . --force
+
+# Install dependencies
+RUN poetry install
+
+# Copy backend source code
+COPY backend/ ./backend/
+
+# Copy entrypoint script
+COPY scripts/docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+
+# Set environment variables for Django
+ENV PYTHONPATH=/app
+ENV DJANGO_SETTINGS_MODULE=cybsuite_backend.settings
+
+WORKDIR /app/backend
+
+# Expose port
+EXPOSE 8000
+
+# Use the entrypoint script
+ENTRYPOINT ["docker-entrypoint.sh"]
