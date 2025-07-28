@@ -591,9 +591,9 @@ nav_app_pentest_internal.add(
     droplist_items=[
         NavMenuDropListItem("Hosts", view="data:list/host"),
         NavMenuDropListItem("Services", view="data:list/service"),
-        NavMenuDropListItem("DNS", view="securitysuiteui:dummy"),
+        NavMenuDropListItem("DNS", view="data:list/dns"),
         NavMenuDropListItem("Passwords", view="data:list/password"),
-        NavMenuDropListItem("Hashes", view="securitysuiteui:dummy"),
+        NavMenuDropListItem("Hash", view="data:list/hash"),
     ],
 )
 
@@ -601,7 +601,9 @@ nav_app_pentest_internal.add(
     name="Active Directory",
     droplist_items=[
         NavMenuDropListItem("Domains", view="data:list/ad_domain"),
-        NavMenuDropListItem("Users", view="data:list/ad_user"),
+        NavMenuDropListItem("AD Users", view="data:list/ad_user"),
+        NavMenuDropListItem("Computers", view="data:list/ad_computer"),
+        NavMenuDropListItem("Windows User", view="data:list/windows_user"),
     ],
 )
 

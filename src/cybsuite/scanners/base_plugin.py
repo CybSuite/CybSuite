@@ -4,8 +4,7 @@ import subprocess
 
 import pexpect
 import requests
-
-# from cybsuite.consts import PATH_CYBSUITE
+from cybsuite.consts import PATH_CYBSUITE
 from cybsuite.cyberdb import CyberDB, CyberDBPluginBaseMixin
 from koalak.plugin_manager import Plugin, PluginManager, abstract
 
