@@ -30,6 +30,8 @@ export interface FieldSchema {
 
 export interface EntitySchema {
   name: string;
+  tags: string[];
+  category: string;
   fields: {
     [fieldName: string]: FieldSchema;
   };
@@ -46,8 +48,18 @@ export interface DataCountResponse {
   count: number;
 }
 
+export interface FullSchemaResponse {
+  entities: EntitySchema[];
+}
+
 // Helper types for column generation
-export type ColumnVariant = 'text' | 'number' | 'select' | 'date' | 'boolean' | 'multiSelect';
+export type ColumnVariant =
+  | "text"
+  | "number"
+  | "select"
+  | "date"
+  | "boolean"
+  | "multiSelect";
 
 export interface ColumnTypeInfo {
   variant: ColumnVariant;

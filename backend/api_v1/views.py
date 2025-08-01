@@ -1,6 +1,7 @@
 import json
 import operator
 import os
+import random
 import tempfile
 from functools import reduce
 
@@ -23,6 +24,17 @@ except ImportError:
     pm_ingestors = None
     pm_reporters = None
 
+# TODO: remove these temporary placeholders:
+example_categories = ["pentest", "network", "vulnerability"]
+example_tags = [
+    "pentest",
+    "network",
+    "vulnerability",
+    "exploit",
+    "reconnaissance",
+    "malware",
+]
+
 
 @api_view(["GET"])
 def get_navbar(request):
@@ -39,7 +51,15 @@ def get_full_schema(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
-    return Response(cyberdb_schema.to_json())
+    entities_data = cyberdb_schema.to_json()
+
+    # TODO: remove these temporary placeholders:
+    for entity_data in entities_data["entities"]:
+        entity_data["category"] = random.choice(example_categories)
+        rando = random.randint(1, 4)
+        entity_data["tags"] = random.sample(example_tags, k=rando)
+
+    return Response(entities_data)
 
 
 @api_view(["GET"])
@@ -66,6 +86,12 @@ def get_entity_schema(request, entity):
 
     try:
         entity_data = cyberdb_schema[entity].to_json()
+
+        # TODO: remove these temporary placeholders:
+        entity_data["category"] = random.choice(example_categories)
+        rando = random.randint(1, 4)
+        entity_data["tags"] = random.sample(example_tags, k=rando)
+
         return Response(entity_data)
     except KeyError:
         return Response(
@@ -652,3 +678,62 @@ def get_ingestors(request):
 
     ingestors = [{"name": plugin.name} for plugin in pm_ingestors]
     return Response(ingestors)
+
+
+@api_view(["GET"])
+def get_schema_categories(request):
+    """Get a list of all available entity categories"""
+    if cyberdb_schema is None:
+        return Response(
+            {"error": "Schema not available"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    try:
+        entities_data = cyberdb_schema.to_json()
+        categories = set()
+
+        for entity_data in entities_data["entities"]:
+            if entity_data.get("category"):
+                categories.add(entity_data["category"])
+
+        categories = set(
+            example_categories
+        )  # TODO: remove this temporary placeholder when real data is available:
+
+        return Response(sorted(list(categories)))
+    except Exception as e:
+        return Response(
+            {"error": f"Error fetching categories: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["GET"])
+def get_schema_tags(request):
+    """Get a list of all available entity tags"""
+    if cyberdb_schema is None:
+        return Response(
+            {"error": "Schema not available"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    try:
+        entities_data = cyberdb_schema.to_json()
+        tags = set()
+
+        for entity_data in entities_data["entities"]:
+            if entity_data.get("tags"):
+                for tag in entity_data["tags"]:
+                    tags.add(tag)
+
+        tags = set(
+            example_tags
+        )  # TODO: remove this temporary placeholder when real data is available
+
+        return Response(sorted(list(tags)))
+    except Exception as e:
+        return Response(
+            {"error": f"Error fetching tags: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
