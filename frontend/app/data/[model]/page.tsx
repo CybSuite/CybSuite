@@ -2,7 +2,6 @@ import { notFound } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { serverApi } from '@/app/lib/api';
 import ModelDataTable from '../../components/data/ModelDataTable';
-import BackToSchemasButton from '../../components/schema/BackToSchemasButton';
 
 interface ModelPageProps {
 	params: Promise<{
@@ -51,7 +50,6 @@ export default async function ModelPage({ params }: ModelPageProps) {
 
 	return (
 		<div className="space-y-6">
-			<BackToSchemasButton />
 			<div className="flex items-center justify-between">
 				<div>
 					<h1 className="text-3xl font-bold tracking-tight capitalize">
