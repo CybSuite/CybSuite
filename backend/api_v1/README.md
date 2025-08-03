@@ -6,6 +6,10 @@
 - `GET /api/v1/schema/entity/{entity}/` - Get entity schema
 - `GET /api/v1/schema/entity/{entity}/names/` - Get entity field names
 - `GET /api/v1/schema/field/{entity}/{field}/` - Get field details
+- `GET /api/v1/schema/categories/` - Get list of all available entity categories
+  - Returns: `["category1", "category2", ...]`
+- `GET /api/v1/schema/tags/` - Get list of all available entity tags
+  - Returns: `["tag1", "tag2", ...]`
 
 ## Data Operations
 - `GET /api/v1/data/record/{entity}/{id}/` - Get record details

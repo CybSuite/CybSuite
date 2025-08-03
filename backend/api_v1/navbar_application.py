@@ -587,6 +587,15 @@ all_applications = [
 
 # Pentest UI #
 nav_app_pentest_internal.add(
+    nav_menu_item=NavMenuItem(
+        "Schema",
+        droplist_items=[
+            NavMenuDropListItem("Schema", view="schema:"),
+        ],
+    ),
+)
+
+nav_app_pentest_internal.add(
     name="Explore",
     droplist_items=[
         NavMenuDropListItem("Hosts", view="data:list/host"),

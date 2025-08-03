@@ -1,7 +1,7 @@
 // API configuration and utilities for connecting to Django backend
 import { HealthCheckResponse, TestResponse, SystemInfoResponse, HealthRootResponse } from '../types/HealthCheck';
 import { NavigationResponse } from '../types/Navigation';
-import { EntityRecord, EntitySchema, DataListResponse, DataCountResponse, FieldSchema } from '../types/Data';
+import { EntityRecord, EntitySchema, DataCountResponse, FieldSchema, FullSchemaResponse } from '../types/Data';
 
 // Get the appropriate base URL based on environment
 export function getApiBaseUrl(): string {
@@ -153,10 +153,12 @@ export const api = {
   // Schema endpoints
   schema: {
     getSchemaNames: () => apiClient.get<string[]>('/api/v1/schema/names/'),
-    getFullSchema: () => apiClient.get<{ [entityName: string]: EntitySchema }>('/api/v1/schema/full/'),
+    getFullSchema: () => apiClient.get<FullSchemaResponse>('/api/v1/schema/full/'),
     getEntitySchema: (entity: string) => apiClient.get<EntitySchema>(`/api/v1/schema/entity/${entity}/`),
     getEntityFieldNames: (entity: string) => apiClient.get<string[]>(`/api/v1/schema/entity/${entity}/names/`),
     getFieldDetails: (entity: string, field: string) => apiClient.get<FieldSchema>(`/api/v1/schema/field/${entity}/${field}/`),
+    getCategories: () => apiClient.get<string[]>('/api/v1/schema/categories/'),
+    getTags: () => apiClient.get<string[]>('/api/v1/schema/tags/'),
   },
 
   // Data endpoints
@@ -270,10 +272,12 @@ export const serverApi = {
   // Schema endpoints
   schema: {
     getSchemaNames: (cookies?: string) => createServerApiClient(cookies).get<string[]>('/api/v1/schema/names/'),
-    getFullSchema: (cookies?: string) => createServerApiClient(cookies).get<{ [entityName: string]: EntitySchema }>('/api/v1/schema/full/'),
+    getFullSchema: (cookies?: string) => createServerApiClient(cookies).get<FullSchemaResponse>('/api/v1/schema/full/'),
     getEntitySchema: (entity: string, cookies?: string) => createServerApiClient(cookies).get<EntitySchema>(`/api/v1/schema/entity/${entity}/`),
     getEntityFieldNames: (entity: string, cookies?: string) => createServerApiClient(cookies).get<string[]>(`/api/v1/schema/entity/${entity}/names/`),
     getFieldDetails: (entity: string, field: string, cookies?: string) => createServerApiClient(cookies).get<FieldSchema>(`/api/v1/schema/field/${entity}/${field}/`),
+    getCategories: (cookies?: string) => createServerApiClient(cookies).get<string[]>('/api/v1/schema/categories/'),
+    getTags: (cookies?: string) => createServerApiClient(cookies).get<string[]>('/api/v1/schema/tags/'),
   },
 
   // Data endpoints

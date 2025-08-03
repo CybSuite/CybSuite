@@ -23,6 +23,8 @@ urlpatterns = [
         views.get_field_schema,
         name="field_schema",
     ),
+    path("schema/categories/", views.get_schema_categories, name="schema_categories"),
+    path("schema/tags/", views.get_schema_tags, name="schema_tags"),
     # Data endpoints - specified structure only
     path("data/entity/<str:entity>/", views.get_entity_data, name="entity_data"),
     path("data/options/<str:entity>/", views.get_entity_options, name="entity_options"),
