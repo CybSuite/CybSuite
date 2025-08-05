@@ -6,12 +6,14 @@ fields:
     in_filter_query: true
     indexed: true
     description: "Username"
+    repr: true
   host:
     type: host
     in_filter_query: true
     indexed: true
     default: null
     description: "Target Windows system"
+    repr: true
   rid:
     type: str
     default: null
