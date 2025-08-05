@@ -34,26 +34,6 @@ class WeakPasswordScanner(BaseCyberDBScanner):
         if self.are_controls_enabled("auth.password.weak"):
             self._analyser_passwords()
 
-    def username_in_password(self, username, password):
-        if not username or not password:
-            return False
-        username_parts = username.split(".")
-
-        for part in username_parts:
-            if part and part in password.lower():
-                return True
-        return False
-
-    def domain_in_password(self, domain, password):
-        if not domain or not password:
-            return False
-        domain_parts = domain.split(".")
-
-        for part in domain_parts:
-            if part and part in password.lower():
-                return True
-        return False
-
     def _compute_entropy(self, password):
         pool_size = 0
         if any(c.islower() for c in password):
