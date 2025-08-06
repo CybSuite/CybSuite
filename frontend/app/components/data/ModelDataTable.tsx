@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { ColumnDef, SortingFn } from "@tanstack/react-table";
 import CybsuiteTable from "@/app/components/data/CybsuiteTable";
 import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header";
@@ -15,7 +16,7 @@ import {
 	getFilterOptions,
 	fetchRelationOptions
 } from "@/app/lib/schema-utils";
-import { AlertCircle, RefreshCw } from "lucide-react";
+import { AlertCircle, RefreshCw, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -43,10 +44,23 @@ const relationSortingFn: SortingFn<EntityRecord> = (rowA, rowB, columnId) => {
 	return aValue.localeCompare(bValue);
 };
 
+// Helper function to get the identifier for detail page navigation
+const getRecordIdentifier = (record: EntityRecord): string => {
+	// Prefer pretty_id if available, otherwise fall back to numeric id
+	if (record.pretty_id && typeof record.pretty_id === 'string') {
+		// URL encode the pretty_id for safe use in URLs
+		return encodeURIComponent(record.pretty_id);
+	}
+	return String(record.id);
+};
+
 interface ModelDataTableProps {
 	model: string;
 	initialData?: EntityRecord[];
 	initialSchema?: EntitySchema;
+	isStaticData?: boolean; // If true, do not fetch data from API, just use initialData
+	showSeeAllButton?: boolean;
+	showRefreshButton?: boolean;
 }
 
 interface ApiResponse<T> {
@@ -59,7 +73,11 @@ export default function ModelDataTable({
 	model,
 	initialData = [],
 	initialSchema,
+	isStaticData = false,
+	showSeeAllButton = false,
+	showRefreshButton = true,
 }: ModelDataTableProps) {
+	const router = useRouter();
 	const [data, setData] = React.useState<EntityRecord[]>(initialData);
 	const [schema, setSchema] = React.useState<EntitySchema | undefined>(initialSchema);
 	const [columns, setColumns] = React.useState<ColumnDef<EntityRecord>[]>([]);
@@ -259,8 +277,10 @@ export default function ModelDataTable({
 	React.useEffect(() => {
 		const init = async () => {
 			await fetchSchema();
-			if (initialData.length === 0) {
+			if (initialData.length === 0 && !isStaticData) {
 				await fetchData(pagination.pageIndex, pagination.pageSize);
+			} else {
+				setLoading(false);
 			}
 		};
 		init();
@@ -299,7 +319,19 @@ export default function ModelDataTable({
 
 		switch (action) {
 			case 'view':
-				console.log('View rows:', rows);
+				if (rows.length === 1) {
+					const record = rows[0];
+					const identifier = getRecordIdentifier(record);
+					// Navigate to the detail page using the record identifier (pretty_id or id)
+					router.push(`/data/${model}/${identifier}`);
+				} else if (rows.length > 1) {
+					// Handle multiple selection - could open them in tabs or show a list
+					console.log('Multiple records selected for view:', rows);
+					// For now, just view the first one
+					const record = rows[0];
+					const identifier = getRecordIdentifier(record);
+					router.push(`/data/${model}/${identifier}`);
+				}
 				break;
 			case 'edit':
 				console.log('Edit rows:', rows);
@@ -328,7 +360,7 @@ export default function ModelDataTable({
 				// Implement export functionality
 				break;
 		}
-	}, [model, fetchData, pagination.pageIndex, pagination.pageSize]);
+	}, [model, router, fetchData, pagination.pageIndex, pagination.pageSize]);
 
 	// Retry function
 	const retry = React.useCallback(() => {
@@ -377,11 +409,23 @@ export default function ModelDataTable({
 
 	return (
 		<div className="space-y-4">
-			<div className="flex justify-end">
-				<Button onClick={retry} variant="outline" size="sm">
-					<RefreshCw className="h-4 w-4 mr-2" />
-					Refresh
-				</Button>
+			<div className="flex justify-end space-x-2">
+				{showSeeAllButton && (
+					<Button
+						onClick={() => window.open(`/data/${model}`, '_blank')}
+						variant="outline"
+						size="sm"
+					>
+						<ExternalLink className="h-4 w-4 mr-2" />
+						See All
+					</Button>
+				)}
+				{showRefreshButton && (
+					<Button onClick={retry} variant="outline" size="sm">
+						<RefreshCw className="h-4 w-4 mr-2" />
+						Refresh
+					</Button>
+				)}
 			</div>
 
 			{columns.length > 0 ? (

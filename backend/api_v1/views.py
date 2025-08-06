@@ -12,6 +12,11 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from .navbar_application import nav_links
+from .pretty_id_utils import (
+    get_entity_pretty_id_config,
+    parse_pretty_id,
+    url_decode_pretty_id,
+)
 from .serializers import serialize_model
 
 # Import the cyberdb_schema (you may need to adjust this import path)
@@ -227,8 +232,7 @@ def get_entity_data(request, entity):
 
 
 @api_view(["GET", "PUT", "PATCH"])
-def get_record_detail(request, entity, record_id):
-    """Get details of a single record by its ID, or update it with PUT/PATCH"""
+def get_record_detail(request, entity, pretty_id):
     db = CyberDB.from_default_config()
     if db is None:
         return Response(
@@ -237,11 +241,48 @@ def get_record_detail(request, entity, record_id):
         )
 
     try:
-        # Get the object
-        obj = db.first(entity, id=record_id)
+        # Check if record_id is a numeric ID or a pretty_id
+        obj = None
+
+        # First try to get by numeric ID
+        try:
+            numeric_id = int(pretty_id)
+            obj = db.first(entity, id=numeric_id)
+        except ValueError:
+            # record_id is not numeric, treat as pretty_id
+            pass
+
+        # If not found by ID, try to find by pretty_id
+        if obj is None:
+            # URL decode the pretty_id
+            decoded_pretty_id = url_decode_pretty_id(pretty_id)
+
+            # Get pretty_id configuration for this entity
+            pretty_id_fields, separator = get_entity_pretty_id_config(
+                cyberdb_schema, entity
+            )
+
+            if pretty_id_fields:
+                # Parse the pretty_id into field values
+                field_values = parse_pretty_id(
+                    decoded_pretty_id, pretty_id_fields, separator
+                )
+
+                # Build filter kwargs for the database query
+                filter_kwargs = {}
+                for field_name, field_value in field_values.items():
+                    if field_value:  # Only add non-empty values
+                        filter_kwargs[field_name] = field_value
+
+                # Query the database with the parsed field values
+                if filter_kwargs:
+                    obj = db.first(entity, **filter_kwargs)
+
         if obj is None:
             return Response(
-                {"error": f"Record with id {record_id} not found in entity {entity}"},
+                {
+                    "error": f"Record with id/pretty_id '{pretty_id}' not found in entity {entity}"
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -253,7 +294,7 @@ def get_record_detail(request, entity, record_id):
         elif request.method == "PUT":
             # Complete replacement
             data = request.data
-            data["id"] = record_id
+            data["id"] = obj.id  # Use the actual numeric ID
 
             # Perform the feed operation (will update existing)
             updated_obj = db.feed(entity, **data)
@@ -267,7 +308,7 @@ def get_record_detail(request, entity, record_id):
 
             # Merge current data with updates
             merged_data = {**current_data, **update_data}
-            merged_data["id"] = record_id
+            merged_data["id"] = obj.id  # Use the actual numeric ID
 
             # Perform the feed operation
             updated_obj = db.feed(entity, **merged_data)

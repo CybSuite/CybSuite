@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { EntitySchema } from '../../types/Data';
-import { ScrollToTop } from './scroll-to-top';
+import { ScrollToTop } from '../navigation/scroll-to-top';
 import { SchemaFilters } from './schema-filters';
 import { SchemaStats } from './schema-stats';
 import { EntityList } from './entity-list';

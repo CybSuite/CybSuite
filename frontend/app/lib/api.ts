@@ -184,6 +184,7 @@ export const api = {
       return apiClient.get<Array<{ id: string | number; repr: string }>>(endpoint);
     },
     getRecord: (entity: string, id: string | number) => apiClient.get<EntityRecord>(`/api/v1/data/record/${entity}/${id}/`),
+    getRecordDetail: (entity: string, id: string | number) => apiClient.get<EntityRecord>(`/api/v1/data/record/${entity}/${id}/`),
     createRecord: (entity: string, data: Partial<EntityRecord>) => apiClient.post<EntityRecord>(`/api/v1/data/record/${entity}/`, data),
     updateRecord: (entity: string, id: string | number, data: Partial<EntityRecord>) => apiClient.put<EntityRecord>(`/api/v1/data/record/${entity}/${id}/`, data),
     patchRecord: (entity: string, id: string | number, data: Partial<EntityRecord>) => apiClient.patch<EntityRecord>(`/api/v1/data/record/${entity}/${id}/`, data),
@@ -294,6 +295,7 @@ export const serverApi = {
       return createServerApiClient(cookies).get<EntityRecord[]>(endpoint);
     },
     getRecord: (entity: string, id: string | number, cookies?: string) => createServerApiClient(cookies).get<EntityRecord>(`/api/v1/data/record/${entity}/${id}/`),
+    getRecordDetail: (entity: string, id: string | number, cookies?: string) => createServerApiClient(cookies).get<EntityRecord>(`/api/v1/data/record/${entity}/${id}/`),
     createRecord: (entity: string, data: Partial<EntityRecord>, cookies?: string) => createServerApiClient(cookies).post<EntityRecord>(`/api/v1/data/record/${entity}/`, data),
     updateRecord: (entity: string, id: string | number, data: Partial<EntityRecord>, cookies?: string) => createServerApiClient(cookies).put<EntityRecord>(`/api/v1/data/record/${entity}/${id}/`, data),
     patchRecord: (entity: string, id: string | number, data: Partial<EntityRecord>, cookies?: string) => createServerApiClient(cookies).patch<EntityRecord>(`/api/v1/data/record/${entity}/${id}/`, data),

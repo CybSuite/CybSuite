@@ -12,15 +12,20 @@
   - Returns: `["tag1", "tag2", ...]`
 
 ## Data Operations
-- `GET /api/v1/data/record/{entity}/{id}/` - Get record details
+- `GET /api/v1/data/record/{entity}/{id_or_pretty_id}/` - Get record details by ID or pretty_id
+  - Supports both numeric IDs and URL-encoded pretty_id values
+  - pretty_id is a human-readable identifier based on entity-specific fields
 - `POST /api/v1/data/record/{entity}/` - Create new record
   - Payload: `{"field1": "value1", "field2": "value2", ...}`
-- `PUT /api/v1/data/record/{entity}/{id}/` - Replace record (complete update)
+- `PUT /api/v1/data/record/{entity}/{id_or_pretty_id}/` - Replace record (complete update)
+  - Supports both numeric IDs and URL-encoded pretty_id values
   - Payload: `{"field1": "value1", "field2": "value2", ...}`
-- `PATCH /api/v1/data/record/{entity}/{id}/` - Partial update
+- `PATCH /api/v1/data/record/{entity}/{id_or_pretty_id}/` - Partial update
+  - Supports both numeric IDs and URL-encoded pretty_id values
   - Payload: `{"field1": "new_value1", ...}`
 - `GET /api/v1/data/entity/{entity}/` - Get paginated list of records
   - Query params: `skip`, `limit`, `search`, `filters` (JSON string)
+  - Response includes `pretty_id` field for each record when configured
 - `GET /api/v1/data/count/{entity}/` - Get record count
 - `GET /api/v1/data/options/{entity}/` - Get entity options for dropdowns/filters
   - Query params: `limit` (default: 100), `search`
@@ -32,7 +37,47 @@
   - Payload: `{"field1": "value1", "field2": "value2", ...}`
 - `POST /api/v1/data/update/{entity}/` - Update record
   - Payload: `{"id": 123, "field1": "value1", ...}`
-- `DELETE /api/v1/data/{entity}/{id}/` - Delete record
+- `DELETE /api/v1/data/{entity}/{id_or_pretty_id}/` - Delete record
+  - Supports both numeric IDs and URL-encoded pretty_id values
+
+## Pretty ID System
+
+The API now supports **pretty_id** - human-readable identifiers for entities based on specific field combinations.
+
+### Features:
+- **Human-readable URLs**: Instead of `/data/service/123`, use `/data/service/192.168.1.1_80_tcp`
+- **Field-based identification**: Based on entity schema's `pretty_id_fields` configuration
+- **URL-safe encoding**: Automatically handles special characters in field values
+- **Backwards compatible**: Still accepts numeric IDs for all operations
+
+### Configuration:
+Pretty ID behavior is defined in entity schema files (e.g., `service.yaml`):
+```yaml
+pretty_id_fields: ['host', 'port', 'protocol']  # Fields to include
+# pretty_id_fields_separator: '_'  # Optional, defaults to '_'
+```
+
+### API Response Format:
+All entity data endpoints now include a `pretty_id` field:
+```json
+{
+  "id": 123,
+  "pretty_id": "192.168.1.1_80_tcp",
+  "host": "192.168.1.1",
+  "port": 80,
+  "protocol": "tcp"
+}
+```
+
+### URL Encoding:
+Pretty IDs are URL-encoded when used in paths to handle special characters:
+- Original: `host with spaces_443_https`
+- URL path: `/data/service/host%20with%20spaces_443_https`
+
+### Field Value Escaping:
+Field values containing the separator character are automatically escaped:
+- Field value: `web_server` (contains separator `_`)
+- Pretty ID: `192.168.1.1_web\_server_80_tcp` (separator escaped as `\_`)
 
 ## Ingest Operations
 - `GET /api/v1/ingest/plugins/` - List ingestors
