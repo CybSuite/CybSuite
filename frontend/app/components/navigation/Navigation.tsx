@@ -123,10 +123,11 @@ export function Navigation({ navigationData }: NavigationProps) {
 				</div>
 
 				{/* Main Navigation */}
-				<NavigationMenu className="mx-6">
+				<NavigationMenu className="mx-6" orientation="horizontal" viewport={false}>
 					<NavigationMenuList>
-						{navigationData.navbar_items.map((menuItem) => {
+						{navigationData.navbar_items.map((menuItem, index) => {
 							const hasSelectedItem = hasActiveMenuItem(menuItem.items);
+							const uniqueKey = `nav-${index}-${menuItem.name}`;
 
 							// Check if this menu item should be rendered as a simple link
 							const isSingleItemWithSameName = menuItem.items.length === 1 &&
@@ -166,8 +167,8 @@ export function Navigation({ navigationData }: NavigationProps) {
 									</NavigationMenuTrigger>
 									<NavigationMenuContent>
 										<div className="grid w-[400px] gap-3 p-4 md:w-[500px] md:grid-cols-2 lg:w-[600px]">
-											{menuItem.items.map((item) => (
-												<NavigationMenuLink key={item.name} asChild>
+											{menuItem.items.map((item, itemIndex) => (
+												<NavigationMenuLink key={`${uniqueKey}-item-${itemIndex}-${item.name}`} asChild>
 													<Link
 														href={item.url}
 														className={cn(

@@ -29,7 +29,7 @@ urlpatterns = [
     path("data/entity/<str:entity>/", views.get_entity_data, name="entity_data"),
     path("data/options/<str:entity>/", views.get_entity_options, name="entity_options"),
     path(
-        "data/record/<str:entity>/<int:record_id>/",
+        "data/record/<str:entity>/<str:pretty_id>/",
         views.get_record_detail,
         name="record_detail",
     ),

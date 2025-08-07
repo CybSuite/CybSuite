@@ -1,20 +1,28 @@
 "use client";
 
 import * as React from "react";
-import { DataTable } from "@/components/data-table/data-table";
 import { DataTableAdvancedToolbar } from "@/components/data-table/data-table-advanced-toolbar";
 import { DataTableActionBar } from "@/components/data-table/data-table-action-bar";
 import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header";
+import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MoreHorizontal, Trash2, Download, Eye, Pencil, Search, X } from "lucide-react";
+import { Trash2, Download, Eye, Pencil, Search, X } from "lucide-react";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   type ColumnDef,
   type ColumnFiltersState,
@@ -29,6 +37,7 @@ import {
   getSortedRowModel,
   getFacetedRowModel,
   getFacetedUniqueValues,
+  flexRender,
 } from "@tanstack/react-table";
 
 // Import our separated components
@@ -339,46 +348,6 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
         size: 40,
     }), []);
 
-    // Actions column
-    const actionsColumn = React.useMemo<ColumnDef<TData>>(() => ({
-        id: "actions",
-        header: () => <div className="w-10" />,
-        cell: ({ row }) => {
-            const rowData = row.original;
-
-            return (
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                            <span className="sr-only">Open menu</span>
-                            <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => onRowAction?.("view", [rowData])}>
-                            <Eye className="mr-2 h-4 w-4" />
-                            View
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onRowAction?.("edit", [rowData])}>
-                            <Pencil className="mr-2 h-4 w-4" />
-                            Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                            onClick={() => onRowAction?.("delete", [rowData])}
-                            className="text-destructive"
-                        >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            );
-        },
-        enableSorting: false,
-        enableHiding: false,
-        size: 40,
-    }), [onRowAction]);
-
     // Final columns array
     const columns = React.useMemo(() => {
         const cols: ColumnDef<TData>[] = [];
@@ -389,12 +358,8 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
 
         cols.push(...(providedColumns || defaultColumns));
 
-        if (onRowAction) {
-            cols.push(actionsColumn);
-        }
-
         return cols;
-    }, [providedColumns, defaultColumns, enableRowSelection, selectionColumn, onRowAction, actionsColumn]);
+    }, [providedColumns, defaultColumns, enableRowSelection, selectionColumn]);
 
     // Create table instance
     const table = useReactTable({
@@ -548,7 +513,80 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
                 </DataTableActionBar>
             )}
 
-            <DataTable table={table} />
+            <div className="overflow-hidden rounded-md border">
+                <Table>
+                    <TableHeader>
+                        {table.getHeaderGroups().map((headerGroup) => (
+                            <TableRow key={headerGroup.id}>
+                                {headerGroup.headers.map((header) => (
+                                    <TableHead key={header.id} colSpan={header.colSpan}>
+                                        {header.isPlaceholder
+                                            ? null
+                                            : flexRender(
+                                                header.column.columnDef.header,
+                                                header.getContext(),
+                                            )}
+                                    </TableHead>
+                                ))}
+                            </TableRow>
+                        ))}
+                    </TableHeader>
+                    <TableBody>
+                        {table.getRowModel().rows?.length ? (
+                            table.getRowModel().rows.map((row) => (
+                                <ContextMenu key={row.id}>
+                                    <ContextMenuTrigger asChild>
+                                        <TableRow
+                                            data-state={row.getIsSelected() && "selected"}
+                                            className="cursor-context-menu"
+                                        >
+                                            {row.getVisibleCells().map((cell) => (
+                                                <TableCell key={cell.id}>
+                                                    {flexRender(
+                                                        cell.column.columnDef.cell,
+                                                        cell.getContext(),
+                                                    )}
+                                                </TableCell>
+                                            ))}
+                                        </TableRow>
+                                    </ContextMenuTrigger>
+                                    {onRowAction && (
+                                        <ContextMenuContent>
+                                            <ContextMenuItem onClick={() => onRowAction("view", [row.original])}>
+                                                <Eye className="mr-2 h-4 w-4" />
+                                                View
+                                            </ContextMenuItem>
+                                            <ContextMenuItem onClick={() => onRowAction("edit", [row.original])}>
+                                                <Pencil className="mr-2 h-4 w-4" />
+                                                Edit
+                                            </ContextMenuItem>
+                                            <ContextMenuItem
+                                                onClick={() => onRowAction("delete", [row.original])}
+                                                variant="destructive"
+                                            >
+                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                Delete
+                                            </ContextMenuItem>
+                                        </ContextMenuContent>
+                                    )}
+                                </ContextMenu>
+                            ))
+                        ) : (
+                            <TableRow>
+                                <TableCell
+                                    colSpan={table.getAllColumns().length}
+                                    className="h-24 text-center"
+                                >
+                                    No results.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
+            <div className="flex flex-col gap-2.5">
+                <DataTablePagination table={table} />
+            </div>
         </div>
     );
 }
