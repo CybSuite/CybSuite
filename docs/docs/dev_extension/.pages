@@ -1,6 +1,8 @@
 
 nav:
     - introduction.md
+    - dev_environment.md
+    - tests.md
     - plugins.md
     - extension.md
     - ...

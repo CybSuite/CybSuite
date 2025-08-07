@@ -5,6 +5,8 @@ This section is the developer guide for those who want to contribute to and deve
 - Understand the internal architecture and design
 - Modify core functionality and components
 
+**Prerequisites**: Before diving into core development, it's recommended to read the [Extension Developer Guide](../dev_extension/introduction.md) first to understand the basics. At minimum, review the [Development Environment](../dev_extension/dev_environment.md) and [Tests](../dev_extension/tests.md) guides.
+
 If you're only interested in developing plugins or extensions, please see the [Extension Developer Guide](../dev_extension/introduction.md) instead.
 
 
