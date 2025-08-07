@@ -16,6 +16,7 @@ fields:
     type: str
     indexed: true
     default: null
+    hidden_in_list: true
   os:
     description: Operating System
     type: str
