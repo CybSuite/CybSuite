@@ -1,11 +1,11 @@
 interface SettingsSectionPageProps {
-  params: {
+  params: Promise<{
     section: string;
-  };
+  }>;
 }
 
-export default function SettingsSectionPage({ params }: SettingsSectionPageProps) {
-  const { section } = params;
+export default async function SettingsSectionPage({ params }: SettingsSectionPageProps) {
+  const { section } = await params;
 
   return (
     <div className="space-y-6">

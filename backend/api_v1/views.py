@@ -14,7 +14,7 @@ from rest_framework.response import Response
 from .navbar_application import nav_links
 from .pretty_id_utils import (
     get_entity_pretty_id_config,
-    parse_pretty_id,
+    parse_pretty_id_with_relations,
     url_decode_pretty_id,
 )
 from .serializers import serialize_model
@@ -263,9 +263,14 @@ def get_record_detail(request, entity, pretty_id):
             )
 
             if pretty_id_fields:
-                # Parse the pretty_id into field values
-                field_values = parse_pretty_id(
-                    decoded_pretty_id, pretty_id_fields, separator
+                # Parse the pretty_id into field values with relation resolution
+                field_values = parse_pretty_id_with_relations(
+                    decoded_pretty_id,
+                    entity,
+                    cyberdb_schema,
+                    db,
+                    pretty_id_fields,
+                    separator,
                 )
 
                 # Build filter kwargs for the database query

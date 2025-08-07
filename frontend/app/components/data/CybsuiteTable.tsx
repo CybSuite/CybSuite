@@ -16,28 +16,28 @@ import {
     ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
 } from "@/components/ui/table";
 import {
-  type ColumnDef,
-  type ColumnFiltersState,
-  type SortingState,
-  type VisibilityState,
-  type RowSelectionState,
-  type PaginationState,
-  useReactTable,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  getFacetedRowModel,
-  getFacetedUniqueValues,
-  flexRender,
+    type ColumnDef,
+    type ColumnFiltersState,
+    type SortingState,
+    type VisibilityState,
+    type RowSelectionState,
+    type PaginationState,
+    useReactTable,
+    getCoreRowModel,
+    getFilteredRowModel,
+    getPaginationRowModel,
+    getSortedRowModel,
+    getFacetedRowModel,
+    getFacetedUniqueValues,
+    flexRender,
 } from "@tanstack/react-table";
 
 // Import our separated components
@@ -539,6 +539,7 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
                                         <TableRow
                                             data-state={row.getIsSelected() && "selected"}
                                             className="cursor-context-menu"
+                                            onDoubleClick={() => onRowAction?.("view", [row.original])}
                                         >
                                             {row.getVisibleCells().map((cell) => (
                                                 <TableCell key={cell.id}>
@@ -554,7 +555,10 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
                                         <ContextMenuContent>
                                             <ContextMenuItem onClick={() => onRowAction("view", [row.original])}>
                                                 <Eye className="mr-2 h-4 w-4" />
-                                                View
+                                                <div className="flex flex-col">
+                                                    <span>View</span>
+                                                    <span className="text-xs text-muted-foreground">Double-click on row</span>
+                                                </div>
                                             </ContextMenuItem>
                                             <ContextMenuItem onClick={() => onRowAction("edit", [row.original])}>
                                                 <Pencil className="mr-2 h-4 w-4" />

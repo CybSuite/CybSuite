@@ -18,7 +18,13 @@ export function ScrollToTableButton({ entityType, fieldName }: ScrollToTableButt
             className="h-6 px-2 text-xs"
             onClick={() => {
                 const tableId = `table-${entityType}`;
-                document.getElementById(tableId)?.scrollIntoView({ behavior: 'smooth' });
+                const element = document.getElementById(tableId);
+                if (element) {
+                    const elementRect = element.getBoundingClientRect();
+                    const absoluteElementTop = elementRect.top + window.pageYOffset;
+                    const middle = absoluteElementTop - (window.innerHeight / 2) + 150;
+                    window.scrollTo({ top: middle, behavior: 'smooth' });
+                }
             }}
             title={`Scroll to ${entityType || fieldName} table`}
         >

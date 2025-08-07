@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { ArrowLeft, Edit, Trash2, Link2, Hash, Calendar, List, ToggleLeft } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Link2, Hash, Calendar, List, ToggleLeft, CircleQuestionMark } from 'lucide-react';
 import Link from 'next/link';
 import { parseFieldAnnotation, getFieldDisplayName } from '@/app/lib/schema-utils';
 import ModelDataTable from './ModelDataTable';
@@ -105,6 +105,16 @@ export default function DetailPageView({ schema, record, model, relatedData, rel
                                         <div className="flex items-center space-x-2">
                                             {getFieldIcon()}
                                             <span>{displayName}</span>
+                                            {field.description && (
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <CircleQuestionMark className="text-gray-500 w-4 h-4" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p>{field.description}</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            )}
                                         </div>
                                         <div className="flex items-center space-x-2">
                                             {typeInfo.isRelation && (
@@ -120,11 +130,6 @@ export default function DetailPageView({ schema, record, model, relatedData, rel
                                             )}
                                         </div>
                                     </CardTitle>
-                                    {field.description && (
-                                        <p className="text-xs text-gray-500 mt-1">
-                                            {field.description}
-                                        </p>
-                                    )}
                                 </CardHeader>
                                 <CardContent className="pt-0">
                                     <div className="text-sm">

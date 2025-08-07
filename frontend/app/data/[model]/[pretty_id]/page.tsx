@@ -115,7 +115,18 @@ async function DetailPageContent({ model, pretty_id }: { model: string; pretty_i
 		// Process schema results
 		relatedSchemasResults.forEach((result, index) => {
 			if (result.status === 'fulfilled' && result.value.result.data) {
-				relatedSchemas[result.value.entityType] = result.value.result.data;
+				const filteredFields = Object.fromEntries(
+					Object.entries(result.value.result.data.fields).filter(
+						([, value]: any[]) => value.referenced_entity !== model
+					)
+				);
+
+				const newData = {
+					...result.value.result.data,
+					fields: filteredFields,
+				};
+
+				relatedSchemas[result.value.entityType] = newData;
 			}
 		});
 
