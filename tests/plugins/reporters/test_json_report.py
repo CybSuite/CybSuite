@@ -359,28 +359,44 @@ def test_json_report_multiple_controls(new_cyberdb):
 
     # Check ldap_anonymous occurrences
     assert len(ldap["occurrences"]) == 5
-    assert ldap["occurrences"][0]["status"] == "ko"
-    assert ldap["occurrences"][0]["details"] == {
+    # Find occurrence by IP to avoid order dependency
+    occ_100 = [
+        occ for occ in ldap["occurrences"] if occ["details"]["ip"] == "192.168.1.100"
+    ][0]
+    assert occ_100["status"] == "ko"
+    assert occ_100["details"] == {
         "ip": "192.168.1.100",
         "port": 389,
     }
-    assert ldap["occurrences"][1]["status"] == "ko"
-    assert ldap["occurrences"][1]["details"] == {
+    occ_101 = [
+        occ for occ in ldap["occurrences"] if occ["details"]["ip"] == "192.168.1.101"
+    ][0]
+    assert occ_101["status"] == "ko"
+    assert occ_101["details"] == {
         "ip": "192.168.1.101",
         "port": 389,
     }
-    assert ldap["occurrences"][2]["status"] == "ok"
-    assert ldap["occurrences"][2]["details"] == {
+    occ_102 = [
+        occ for occ in ldap["occurrences"] if occ["details"]["ip"] == "192.168.1.102"
+    ][0]
+    assert occ_102["status"] == "ok"
+    assert occ_102["details"] == {
         "ip": "192.168.1.102",
         "port": 389,
     }
-    assert ldap["occurrences"][3]["status"] == "ok"
-    assert ldap["occurrences"][3]["details"] == {
+    occ_103 = [
+        occ for occ in ldap["occurrences"] if occ["details"]["ip"] == "192.168.1.103"
+    ][0]
+    assert occ_103["status"] == "ok"
+    assert occ_103["details"] == {
         "ip": "192.168.1.103",
         "port": 389,
     }
-    assert ldap["occurrences"][4]["status"] == "ok"
-    assert ldap["occurrences"][4]["details"] == {
+    occ_104 = [
+        occ for occ in ldap["occurrences"] if occ["details"]["ip"] == "192.168.1.104"
+    ][0]
+    assert occ_104["status"] == "ok"
+    assert occ_104["details"] == {
         "ip": "192.168.1.104",
         "port": 389,
     }
@@ -396,13 +412,23 @@ def test_json_report_multiple_controls(new_cyberdb):
 
     # Check observation occurrences (only KO occurrences)
     assert len(observation["occurrences"]) == 2
-    assert observation["occurrences"][0]["severity"] == "high"
-    assert observation["occurrences"][0]["details"] == {
+    obs_100 = [
+        occ
+        for occ in observation["occurrences"]
+        if occ["details"]["ip"] == "192.168.1.100"
+    ][0]
+    assert obs_100["severity"] == "high"
+    assert obs_100["details"] == {
         "ip": "192.168.1.100",
         "port": 389,
     }
-    assert observation["occurrences"][1]["severity"] == "high"
-    assert observation["occurrences"][1]["details"] == {
+    obs_101 = [
+        occ
+        for occ in observation["occurrences"]
+        if occ["details"]["ip"] == "192.168.1.101"
+    ][0]
+    assert obs_101["severity"] == "high"
+    assert obs_101["details"] == {
         "ip": "192.168.1.101",
         "port": 389,
     }
