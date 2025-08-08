@@ -145,6 +145,115 @@ def parse_pretty_id(
     return result
 
 
+def parse_pretty_id_with_relations(
+    pretty_id: str,
+    entity_name: str,
+    cyberdb_schema,
+    cyberdb_instance,
+    pretty_id_fields: List[str] = None,
+    separator: str = "_",
+) -> Dict[str, Any]:
+    """
+    Parse a pretty_id string back into field values, resolving relation fields to their IDs.
+
+    Args:
+        pretty_id: The pretty_id string to parse
+        entity_name: Name of the entity this pretty_id belongs to
+        cyberdb_schema: The schema object to get field type information
+        cyberdb_instance: The database instance to query for related entities
+        pretty_id_fields: List of field names that make up the pretty_id (if None, get from schema)
+        separator: Character that separates field values
+
+    Returns:
+        Dictionary mapping field names to their values (with relation fields resolved to IDs)
+    """
+    # Get pretty_id configuration from schema if not provided
+    if pretty_id_fields is None:
+        pretty_id_fields, separator = get_entity_pretty_id_config(
+            cyberdb_schema, entity_name
+        )
+        if not pretty_id_fields:
+            return {}
+
+    # First, parse the pretty_id normally to get string values
+    parsed_values = parse_pretty_id(pretty_id, pretty_id_fields, separator)
+
+    # Get entity schema to check field types
+    try:
+        entity_schema = cyberdb_schema[entity_name]
+        entity_data = entity_schema.to_json()
+        fields_info = entity_data.get("fields", {})
+    except (KeyError, AttributeError):
+        # If we can't get schema info, return the parsed values as-is
+        return parsed_values
+
+    # Process each field to resolve relations and convert types
+    result = {}
+    for field_name, field_value in parsed_values.items():
+        if field_name in fields_info:
+            field_info = fields_info[field_name]
+            field_annotation = field_info.get("annotation", "")
+            referenced_entity = field_info.get("referenced_entity")
+
+            # Extract the actual type from annotation like "<class 'int'>"
+            field_type = extract_type_from_annotation(field_annotation)
+
+            # Check if this is a relation field (has referenced_entity)
+            if referenced_entity:
+                # This is a relation field, resolve the string representation to an ID
+                related_entity_id = resolve_relation_string_to_id(
+                    field_value, referenced_entity, cyberdb_instance, cyberdb_schema
+                )
+
+                if related_entity_id is not None:
+                    result[field_name] = related_entity_id
+                else:
+                    # Couldn't resolve the relation, keep the original string
+                    result[field_name] = field_value
+            else:
+                # Not a relation field, convert based on type
+                result[field_name] = convert_field_value(field_value, field_type)
+        else:
+            # Field not in schema, keep the original value
+            result[field_name] = field_value
+
+    return result
+
+
+def resolve_relation_string_to_id(
+    string_representation: str,
+    related_entity_name: str,
+    cyberdb_instance,
+    cyberdb_schema,
+) -> Any:
+    """
+    Resolve a string representation of a related entity to its actual ID.
+
+    Args:
+        string_representation: The string representation (e.g., "192.168.0.10")
+        related_entity_name: Name of the related entity (e.g., "host")
+        cyberdb_instance: The database instance to query
+        cyberdb_schema: The schema object
+
+    Returns:
+        The ID of the related entity, or None if not found
+    """
+    try:
+        # Get all entities of the related type using the correct CyberDB API
+        queryset = cyberdb_instance.request(related_entity_name)
+
+        # Find the entity whose string representation matches
+        for entity in queryset:
+            if str(entity) == string_representation:
+                return entity.id
+
+        # If no exact match found, return None
+        return None
+
+    except Exception as e:
+        return None
+
+
 def url_encode_pretty_id(pretty_id: str) -> str:
     """
     URL encode a pretty_id for safe use in URLs.
@@ -186,11 +295,80 @@ def get_entity_pretty_id_config(cyberdb_schema, entity_name: str) -> tuple:
         entity_schema = cyberdb_schema[entity_name]
         pretty_id_fields = getattr(entity_schema, "pretty_id_fields", None)
         separator = getattr(entity_schema, "pretty_id_fields_separator", "_")
-
         # Handle case where pretty_id_fields is a string (single field)
         if isinstance(pretty_id_fields, str):
             pretty_id_fields = [pretty_id_fields]
 
         return pretty_id_fields, separator
-    except (KeyError, AttributeError):
+    except (KeyError, AttributeError) as e:
         return None, None
+
+
+def convert_field_value(value: str, field_type: str) -> Any:
+    """
+    Convert a string value to the appropriate type based on the field type.
+
+    Args:
+        value: The string value to convert
+        field_type: The type of the field (e.g., 'int', 'float', 'bool', 'str')
+
+    Returns:
+        The converted value with the appropriate type
+    """
+    if not value or value == "":
+        return value
+
+    try:
+        # Handle different field types
+        if field_type in ["int", "integer"]:
+            return int(value)
+        elif field_type in ["float", "decimal", "number"]:
+            return float(value)
+        elif field_type in ["bool", "boolean"]:
+            # Handle various boolean representations
+            if value.lower() in ["true", "1", "yes", "on"]:
+                return True
+            elif value.lower() in ["false", "0", "no", "off"]:
+                return False
+            else:
+                # If it's not a clear boolean, try to convert to int first
+                try:
+                    int_val = int(value)
+                    return bool(int_val)
+                except ValueError:
+                    return value  # Keep as string if can't parse
+        else:
+            # For string types or unknown types, keep as string
+            return value
+    except (ValueError, TypeError):
+        # If conversion fails, return the original string value
+        return value
+
+
+def extract_type_from_annotation(annotation: str) -> str:
+    """
+    Extract the simple type name from a Python type annotation.
+
+    Args:
+        annotation: Type annotation string like "<class 'int'>" or "str"
+
+    Returns:
+        Simple type name like 'int', 'float', 'str', etc.
+    """
+    if not annotation:
+        return "str"
+
+    # Handle Python class annotations like "<class 'int'>"
+    if annotation.startswith("<class '") and annotation.endswith("'>"):
+        return annotation[8:-2]  # Extract 'int' from "<class 'int'>"
+
+    # Handle simple type names
+    annotation_lower = annotation.lower()
+    if "int" in annotation_lower:
+        return "int"
+    elif "float" in annotation_lower:
+        return "float"
+    elif "bool" in annotation_lower:
+        return "bool"
+    else:
+        return "str"
