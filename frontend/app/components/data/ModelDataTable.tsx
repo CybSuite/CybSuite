@@ -6,6 +6,8 @@ import { ColumnDef, SortingFn } from "@tanstack/react-table";
 import CybsuiteTable from "@/app/components/data/CybsuiteTable";
 import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header";
 import { RelationLink } from "@/app/components/data/RelationLink";
+import { EntityFormDialog } from "@/app/components/data/form/EntityFormDialog";
+import { BulkUpdateDialog } from "@/app/components/data/form/BulkUpdateDialog";
 import { api } from "@/app/lib/api";
 import { EntityRecord, EntitySchema } from "@/app/types/Data";
 import {
@@ -16,9 +18,77 @@ import {
 	getFilterOptions,
 	fetchRelationOptions
 } from "@/app/lib/schema-utils";
-import { AlertCircle, RefreshCw, ExternalLink } from "lucide-react";
+import { AlertCircle, RefreshCw, ExternalLink, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
+
+// Helper function to render tags as badges
+const renderTagBadges = (value: any, maxDisplay: number = 3) => {
+	let tags: string[] = [];
+
+	if (Array.isArray(value)) {
+		tags = value.map(String);
+	} else if (typeof value === 'string') {
+		try {
+			const parsed = JSON.parse(value);
+			if (Array.isArray(parsed)) {
+				tags = parsed.map(String);
+			} else {
+				tags = [String(parsed)];
+			}
+		} catch {
+			tags = [value];
+		}
+	} else if (value !== null && value !== undefined) {
+		tags = [String(value)];
+	}
+
+	if (tags.length === 0) {
+		return <span className="text-gray-400">—</span>;
+	}
+
+	const displayTags = tags.slice(0, maxDisplay);
+	const remainingCount = tags.length - maxDisplay;
+	const remainingTags = tags.slice(maxDisplay);
+
+	return (
+		<div className="flex flex-wrap gap-1">
+			{displayTags.map((tag, index) => (
+				<Badge key={index} variant="secondary" className="text-xs">
+					{tag}
+				</Badge>
+			))}
+			{remainingCount > 0 && (
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<Badge variant="outline" className="text-xs">
+							+{remainingCount}
+						</Badge>
+					</TooltipTrigger>
+					<TooltipContent side="top" className="max-w-md">
+						<div className="flex flex-wrap gap-1 min-w-0">
+							{remainingTags.map((tag, index) => (
+								<Badge key={index} variant="secondary" className="text-xs whitespace-nowrap">
+									{tag}
+								</Badge>
+							))}
+						</div>
+					</TooltipContent>
+				</Tooltip>
+			)}
+		</div>
+	);
+};
 
 // Custom sorting function for relation fields
 const relationSortingFn: SortingFn<EntityRecord> = (rowA, rowB, columnId) => {
@@ -54,28 +124,48 @@ const getRecordIdentifier = (record: EntityRecord): string => {
 	return String(record.id);
 };
 
+// Helper function to get the string representation of a record
+const getRecordDisplayName = (record: EntityRecord): string => {
+	// Prefer repr (string representation) if available
+	if (record.repr && typeof record.repr === 'string') {
+		return record.repr;
+	}
+	// Fall back to pretty_id if available
+	if (record.pretty_id && typeof record.pretty_id === 'string') {
+		return record.pretty_id;
+	}
+	// Fall back to numeric id
+	if (record.id) {
+		return `ID: ${record.id}`;
+	}
+	// Last resort
+	return 'Unknown record';
+};
+
 interface ModelDataTableProps {
 	model: string;
 	initialData?: EntityRecord[];
 	initialSchema?: EntitySchema;
+	initialFormSchema?: any; // Form schema from server
+	initialFieldOptions?: Record<string, any[]>; // Preloaded field options
 	isStaticData?: boolean; // If true, do not fetch data from API, just use initialData
+	flattenDictColumn?: boolean; // If true, flatten dict fields into columns
 	showSeeAllButton?: boolean;
 	showRefreshButton?: boolean;
-}
-
-interface ApiResponse<T> {
-	data?: T;
-	error?: string;
-	status: number;
+	showAddButton?: boolean;
 }
 
 export default function ModelDataTable({
 	model,
 	initialData = [],
 	initialSchema,
+	initialFormSchema,
+	initialFieldOptions = {},
 	isStaticData = false,
+	flattenDictColumn = false,
 	showSeeAllButton = false,
 	showRefreshButton = true,
+	showAddButton = false,
 }: ModelDataTableProps) {
 	const router = useRouter();
 	const [data, setData] = React.useState<EntityRecord[]>(initialData);
@@ -86,10 +176,26 @@ export default function ModelDataTable({
 	const [loading, setLoading] = React.useState(!initialData.length);
 	const [error, setError] = React.useState<string | null>(null);
 	const [tableKey, setTableKey] = React.useState(`${model}-table-initial`);
-	const [pagination, setPagination] = React.useState({
+	const [pagination, _] = React.useState({
 		pageIndex: 0,
 		pageSize: 10,
 	});
+
+	// Edit state for the edit dialog
+	const [editRecord, setEditRecord] = React.useState<EntityRecord | null>(null);
+	const [editDialogOpen, setEditDialogOpen] = React.useState(false);
+
+	// Bulk update state
+	const [bulkUpdateDialogOpen, setBulkUpdateDialogOpen] = React.useState(false);
+	const [selectedRecordsForBulkUpdate, setSelectedRecordsForBulkUpdate] = React.useState<EntityRecord[]>([]);
+
+	// Delete confirmation dialog state
+	const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+	const [recordsToDelete, setRecordsToDelete] = React.useState<EntityRecord[]>([]);
+	const [isDeleting, setIsDeleting] = React.useState(false);
+
+	// Row selection state
+	const [rowSelection, setRowSelection] = React.useState<Record<string, boolean>>({});
 
 	// Fetch schema if not provided
 	const fetchSchema = React.useCallback(async () => {
@@ -98,7 +204,7 @@ export default function ModelDataTable({
 
 			// Fetch schema if not provided
 			if (!schema) {
-				const schemaResponse = await api.schema.getEntitySchema(model);
+				const schemaResponse = await api.schema.getEntitySchema(model, flattenDictColumn);
 				if (schemaResponse.error) {
 					throw new Error(`Schema error: ${schemaResponse.error}`);
 				}
@@ -107,7 +213,7 @@ export default function ModelDataTable({
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Failed to fetch schema information');
 		}
-	}, [model, schema]);
+	}, [model, schema, flattenDictColumn]);
 
 	// Fetch relation options for fields that reference other entities
 	const fetchRelationOptionsForSchema = React.useCallback(async (schemaData: EntitySchema) => {
@@ -164,6 +270,7 @@ export default function ModelDataTable({
 			const response = await api.data.getEntityData(model, {
 				skip: pageIndex * pageSize,
 				limit: pageSize,
+				flattenDict: flattenDictColumn,
 			});
 
 			if (response.error) {
@@ -176,14 +283,25 @@ export default function ModelDataTable({
 		} finally {
 			setLoading(false);
 		}
-	}, [model]);
+	}, [model, flattenDictColumn]);
 
 	// Generate columns based on schema and fields
 	const generateColumns = React.useCallback((): ColumnDef<EntityRecord>[] => {
 		if (!schema || !schema.fields) return [];
 
 		// Get ALL fields (don't filter out hidden ones - they just start as hidden)
-		return Object.values(schema.fields).map((fieldSchema): ColumnDef<EntityRecord> => {
+		const allFields = Object.values(schema.fields);
+
+		// Filter out original dict fields if flattenDictColumn is true
+		const fieldsToShow = flattenDictColumn
+			? allFields.filter(fieldSchema => {
+				const typeInfo = parseFieldAnnotation(fieldSchema);
+				// Keep non-dict fields and flattened dict fields (those with dots)
+				return typeInfo.baseType !== 'dict' || fieldSchema.name.includes('.');
+			})
+			: allFields;
+
+		return fieldsToShow.map((fieldSchema): ColumnDef<EntityRecord> => {
 			const fieldName = fieldSchema.name;
 			const typeInfo = parseFieldAnnotation(fieldSchema);
 			const displayName = getFieldDisplayName(fieldSchema);
@@ -195,7 +313,11 @@ export default function ModelDataTable({
 
 			return {
 				id: fieldName,
-				accessorKey: fieldName as keyof EntityRecord,
+				// Use accessor function for fields with dots to handle flattened fields
+				...(fieldName.includes('.')
+					? { accessorFn: (row: EntityRecord) => row[fieldName as keyof EntityRecord] }
+					: { accessorKey: fieldName as keyof EntityRecord }
+				),
 				header: ({ column }) => (
 					<DataTableColumnHeader column={column} title={displayName} />
 				),
@@ -210,6 +332,41 @@ export default function ModelDataTable({
 								entityName={typeInfo.referencedEntity}
 								isArray={typeInfo.isArray}
 							/>
+						);
+					}
+
+					// Special handling for array fields that are not relations (tags, etc.)
+					if (typeInfo.isArray && !typeInfo.isRelation) {
+						return renderTagBadges(value);
+					}
+
+					// Special handling for dict fields - render inline with tooltip
+					if (typeInfo.baseType === 'dict' && value !== null && value !== undefined) {
+						const dictStr = typeof value === 'string' ? value : JSON.stringify(value);
+						const truncatedStr = dictStr.length > 100 ? dictStr.slice(0, 100) + '...' : dictStr;
+
+						// Format the dict for tooltip display
+						let formattedDict = '';
+						try {
+							const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+							formattedDict = JSON.stringify(parsed, null, 2);
+						} catch {
+							formattedDict = dictStr;
+						}
+
+						return (
+							<Tooltip>
+								<TooltipTrigger asChild>
+									<span className="text-sm font-mono">
+										{truncatedStr}
+									</span>
+								</TooltipTrigger>
+								<TooltipContent className="max-w-md">
+									<pre className="text-xs whitespace-pre-wrap break-words">
+										{formattedDict}
+									</pre>
+								</TooltipContent>
+							</Tooltip>
 						);
 					}
 
@@ -231,7 +388,8 @@ export default function ModelDataTable({
 					placeholder: `Search ${displayName.toLowerCase()}...`,
 					variant: typeInfo.isRelation ?
 						(typeInfo.isArray ? 'multiSelect' : 'select') :
-						typeInfo.variant,
+						// Map datetime to date for table filtering compatibility
+						(typeInfo.variant === 'datetime' ? 'date' : typeInfo.variant),
 					options: filterOptions,
 				},
 				enableColumnFilter:
@@ -250,7 +408,7 @@ export default function ModelDataTable({
 							typeInfo.isRelation ? 150 : undefined,
 			};
 		});
-	}, [schema, relationOptions]);
+	}, [schema, relationOptions, flattenDictColumn]);
 
 	// Update columns when schema or relation options change - force immediate update
 	React.useEffect(() => {
@@ -315,45 +473,38 @@ export default function ModelDataTable({
 
 	// Handle row actions
 	const handleRowAction = React.useCallback(async (action: string, rows: EntityRecord[]) => {
-		console.log(`Action: ${action}`, rows);
-
 		switch (action) {
 			case 'view':
-				if (rows.length === 1) {
+				if (rows.length > 0) {
 					const record = rows[0];
 					const identifier = getRecordIdentifier(record);
 					// Navigate to the detail page using the record identifier (pretty_id or id)
 					router.push(`/data/${model}/${identifier}`);
-				} else if (rows.length > 1) {
-					// Handle multiple selection - could open them in tabs or show a list
-					console.log('Multiple records selected for view:', rows);
-					// For now, just view the first one
-					const record = rows[0];
-					const identifier = getRecordIdentifier(record);
-					router.push(`/data/${model}/${identifier}`);
 				}
 				break;
 			case 'edit':
-				console.log('Edit rows:', rows);
+				// Edit functionality - open EntityFormDialog in edit mode
+				if (rows.length === 1) {
+					const record = rows[0];
+					setEditRecord(record);
+					setEditDialogOpen(true);
+				}
+				break;
+			case 'bulkUpdate':
+				// Bulk update functionality
+				if (rows.length === 1) {
+					const record = rows[0];
+					setEditRecord(record);
+					setEditDialogOpen(true);
+				} else if (rows.length > 1) {
+					setSelectedRecordsForBulkUpdate(rows);
+					setBulkUpdateDialogOpen(true);
+				}
 				break;
 			case 'delete':
-				if (confirm(`Are you sure you want to delete ${rows.length} record(s)?`)) {
-					try {
-						// Delete each selected record
-						for (const row of rows) {
-							if (row.id) {
-								const response = await api.data.deleteRecord(model, row.id);
-								if (response.error) {
-									throw new Error(`Failed to delete record ${row.id}: ${response.error}`);
-								}
-							}
-						}
-						// Refresh data after deletion
-						await fetchData(pagination.pageIndex, pagination.pageSize);
-					} catch (err) {
-						setError(err instanceof Error ? err.message : 'Failed to delete records');
-					}
-				}
+				// Open confirmation dialog for delete
+				setRecordsToDelete(rows);
+				setDeleteDialogOpen(true);
 				break;
 			case 'export':
 				console.log('Export rows:', rows);
@@ -361,6 +512,64 @@ export default function ModelDataTable({
 				break;
 		}
 	}, [model, router, fetchData, pagination.pageIndex, pagination.pageSize]);
+
+	// Handle bulk update success
+	const handleBulkUpdateSuccess = React.useCallback((updatedCount: number) => {
+		// Refresh data after successful bulk update
+		fetchData(pagination.pageIndex, pagination.pageSize);
+		// Clear row selection after successful update
+		setRowSelection({});
+		// Close dialog and reset state
+		setBulkUpdateDialogOpen(false);
+		setSelectedRecordsForBulkUpdate([]);
+	}, [fetchData, pagination.pageIndex, pagination.pageSize]);
+
+	// Handle actual deletion after confirmation
+	const handleConfirmDelete = React.useCallback(async () => {
+		setIsDeleting(true);
+		try {
+			// Collect all valid record IDs
+			const recordIds = recordsToDelete
+				.filter(row => row.id !== undefined && row.id !== null)
+				.map(row => row.id as string | number);
+
+			if (recordIds.length === 0) {
+				throw new Error('No valid record IDs found for deletion');
+			}
+
+			// Use bulk delete API
+			const response = await api.data.bulkDeleteRecords(model, recordIds);
+
+			if (response.error) {
+				throw new Error(response.error);
+			}
+
+			// Check if there were any failures
+			if (response.data && response.data.failed_count > 0) {
+				const errorMessage = `Successfully deleted ${response.data.deleted_count} records, but ${response.data.failed_count} failed: ${response.data.errors.join(', ')}`;
+				console.warn(errorMessage);
+				// You might want to show a toast notification here
+			}
+
+			// Refresh data after deletion
+			await fetchData(pagination.pageIndex, pagination.pageSize);
+			// Clear row selection after successful deletion
+			setRowSelection({});
+			// Close dialog and reset state
+			setDeleteDialogOpen(false);
+			setRecordsToDelete([]);
+		} catch (err) {
+			setError(err instanceof Error ? err.message : 'Failed to delete records');
+		} finally {
+			setIsDeleting(false);
+		}
+	}, [recordsToDelete, model, fetchData, pagination.pageIndex, pagination.pageSize]);
+
+	// Handle cancel deletion
+	const handleCancelDelete = React.useCallback(() => {
+		setDeleteDialogOpen(false);
+		setRecordsToDelete([]);
+	}, []);
 
 	// Retry function
 	const retry = React.useCallback(() => {
@@ -409,23 +618,37 @@ export default function ModelDataTable({
 
 	return (
 		<div className="space-y-4">
-			<div className="flex justify-end space-x-2">
-				{showSeeAllButton && (
-					<Button
-						onClick={() => window.open(`/data/${model}`, '_blank')}
-						variant="outline"
-						size="sm"
-					>
-						<ExternalLink className="h-4 w-4 mr-2" />
-						See All
-					</Button>
-				)}
-				{showRefreshButton && (
-					<Button onClick={retry} variant="outline" size="sm">
-						<RefreshCw className="h-4 w-4 mr-2" />
-						Refresh
-					</Button>
-				)}
+			<div className="flex justify-end">
+				<div className="flex space-x-2">
+					{showAddButton && !isStaticData && (
+						<EntityFormDialog
+							entity={model}
+							initialFormSchema={initialFormSchema}
+							initialFieldOptions={initialFieldOptions}
+							onSuccess={() => {
+								// Refresh the data after successful creation
+								retry();
+							}}
+						/>
+					)}
+
+					{showSeeAllButton && (
+						<Button
+							onClick={() => window.open(`/data/${model}`, '_blank')}
+							variant="outline"
+							size="lg"
+						>
+							<ExternalLink className="h-4 w-4 mr-2" />
+							See All
+						</Button>
+					)}
+					{showRefreshButton && (
+						<Button onClick={retry} variant="outline" size="lg">
+							<RefreshCw className="h-4 w-4 mr-2" />
+							Refresh
+						</Button>
+					)}
+				</div>
 			</div>
 
 			{columns.length > 0 ? (
@@ -442,6 +665,8 @@ export default function ModelDataTable({
 					onRowAction={handleRowAction}
 					tableId={`${model}-table`}
 					initialColumnVisibility={columnVisibility}
+					rowSelection={rowSelection}
+					onRowSelectionChange={setRowSelection}
 				/>
 			) : (
 				<div className="space-y-4">
@@ -459,6 +684,99 @@ export default function ModelDataTable({
 					</div>
 				</div>
 			)}
+
+			{/* Edit Dialog */}
+			{editRecord && (
+				<EntityFormDialog
+					entity={model}
+					initialFormSchema={initialFormSchema}
+					initialFieldOptions={relationOptions}
+					mode="edit"
+					editRecord={editRecord}
+					recordId={editRecord.id || editRecord.uuid}
+					open={editDialogOpen}
+					onOpenChange={(open) => {
+						setEditDialogOpen(open);
+						if (!open) {
+							setEditRecord(null);
+						}
+					}}
+					onSuccess={() => {
+						// Refresh the data after successful edit
+						setEditDialogOpen(false);
+						setEditRecord(null);
+						retry();
+					}}
+				/>
+			)}
+
+			{/* Bulk Update Dialog */}
+			<BulkUpdateDialog
+				entity={model}
+				recordIds={selectedRecordsForBulkUpdate.map(record => record.id || record.uuid).filter(Boolean)}
+				recordCount={selectedRecordsForBulkUpdate.length}
+				schema={schema}
+				fieldOptions={relationOptions}
+				open={bulkUpdateDialogOpen}
+				onOpenChange={setBulkUpdateDialogOpen}
+				onSuccess={handleBulkUpdateSuccess}
+			/>
+
+			{/* Delete Confirmation Dialog */}
+			<Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle className="flex items-center gap-2">
+							<Trash2 className="h-5 w-5 text-red-600" />
+							Confirm Deletion
+						</DialogTitle>
+						<DialogDescription>
+							Are you sure you want to delete {recordsToDelete.length} record(s)?
+							This action cannot be undone.
+						</DialogDescription>
+					</DialogHeader>
+
+					{recordsToDelete.length > 0 && (
+						<div className="py-4">
+							<p className="text-sm text-gray-600 mb-2">Records to be deleted:</p>
+							<div className="max-h-32 overflow-y-auto border rounded p-2 bg-gray-50">
+								{recordsToDelete.map((record, index) => (
+									<div key={record.id || index} className="text-sm py-1">
+										{getRecordDisplayName(record)}
+									</div>
+								))}
+							</div>
+						</div>
+					)}
+
+					<DialogFooter>
+						<Button
+							variant="outline"
+							onClick={handleCancelDelete}
+							disabled={isDeleting}
+						>
+							Cancel
+						</Button>
+						<Button
+							variant="destructive"
+							onClick={handleConfirmDelete}
+							disabled={isDeleting}
+						>
+							{isDeleting ? (
+								<>
+									<RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+									Deleting...
+								</>
+							) : (
+								<>
+									<Trash2 className="h-4 w-4 mr-2" />
+									Delete {recordsToDelete.length} Record(s)
+								</>
+							)}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 }

@@ -11,6 +11,9 @@ def serialize_model(cyberdb_schema, item, table_name):
 
     result["id"] = item.id
 
+    # Add string representation of the record
+    result["repr"] = str(item)
+
     # Add pretty_id if configured for this entity
     pretty_id_fields, separator = get_entity_pretty_id_config(
         cyberdb_schema, table_name

@@ -1,5 +1,8 @@
 # API v1 Endpoints
 
+## Navigation Operations
+- `GET /api/v1/nav_links/` - Get navigation bar structure for the frontend
+
 ## Schema Operations
 - `GET /api/v1/schema/full/` - Get complete schema
 - `GET /api/v1/schema/names/` - Get schema names
@@ -24,14 +27,15 @@
   - Supports both numeric IDs and URL-encoded pretty_id values
   - Payload: `{"field1": "new_value1", ...}`
 - `GET /api/v1/data/entity/{entity}/` - Get paginated list of records
-  - Query params: `skip`, `limit`, `search`, `filters` (JSON string)
+  - Query params: `skip`, `limit`, `search`, `filters` (JSON string), `flatten_dict` (boolean)
   - Response includes `pretty_id` field for each record when configured
+  - `flatten_dict=true` enables flattening of dict/JSON fields into separate columns
 - `GET /api/v1/data/count/{entity}/` - Get record count
 - `GET /api/v1/data/options/{entity}/` - Get entity options for dropdowns/filters
   - Query params: `limit` (default: 100), `search`
   - Response: `[{"id": 1, "repr": "Display Name"}, ...]`
   - Returns lightweight id/label pairs for UI components
-- `POST /api/v1/data/new/{entity}/` - Create new entry
+- `POST /api/v1/data/new/{entity}/` - Create new entry (alias for record creation)
   - Payload: `{"field1": "value1", "field2": "value2", ...}`
 - `POST /api/v1/data/feed/{entity}/` - Upsert record
   - Payload: `{"field1": "value1", "field2": "value2", ...}`
@@ -39,6 +43,16 @@
   - Payload: `{"id": 123, "field1": "value1", ...}`
 - `DELETE /api/v1/data/{entity}/{id_or_pretty_id}/` - Delete record
   - Supports both numeric IDs and URL-encoded pretty_id values
+- `POST /api/v1/data/bulk-delete/{entity}/` - Bulk delete multiple records
+  - Payload: `{"ids": [1, 2, 3, ...]}`
+  - Returns detailed status for each deletion attempt
+  - Response: `{"status": "completed", "deleted_count": 2, "failed_count": 1, "deleted_ids": [1, 2], "failed_ids": [3], "errors": ["Record 3 not found"]}`
+- `POST /api/v1/data/bulk-update/{entity}/` - Bulk update multiple records
+  - Payload: `{"ids": [1, 2, 3, ...], "data": {"field1": "new_value", ...}}`
+  - Only allows updates to fields without unique/index constraints
+  - Automatically filters out read-only fields (id, pretty_id) and reverse relations
+  - Returns detailed status for each update attempt
+  - Response: `{"status": "completed", "updated_count": 2, "failed_count": 1, "updated_ids": [1, 2], "failed_ids": [3], "updated_fields": ["field1"], "errors": ["Record 3 not found"]}`
 
 ## Pretty ID System
 
@@ -79,6 +93,42 @@ Field values containing the separator character are automatically escaped:
 - Field value: `web_server` (contains separator `_`)
 - Pretty ID: `192.168.1.1_web\_server_80_tcp` (separator escaped as `\_`)
 
+## Dict/JSON Field Flattening
+
+Several data endpoints support automatic flattening of dict/JSON fields into separate columns for easier querying and display.
+
+### Features:
+- **Dynamic Column Expansion**: Dict fields are automatically expanded into separate columns
+- **Nested Key Support**: Handles nested dictionary structures with dot notation
+- **Query Parameter Control**: Use `flatten_dict=true` to enable flattening
+- **Post-processing Filters**: Search and filter work on flattened fields
+
+### Usage:
+Add `flatten_dict=true` query parameter to these endpoints:
+- `GET /api/v1/data/entity/{entity}/?flatten_dict=true`
+- `GET /api/v1/data/record/{entity}/{id}/?flatten_dict=true`
+- `GET /api/v1/schema/entity/{entity}/?flatten_dict=true`
+
+### Example:
+Original record with dict field:
+```json
+{
+  "id": 1,
+  "name": "service1",
+  "details": {"host": "192.168.1.1", "config": {"ssl": true}}
+}
+```
+
+Flattened response:
+```json
+{
+  "id": 1,
+  "name": "service1",
+  "details.host": "192.168.1.1",
+  "details.config.ssl": true
+}
+```
+
 ## Ingest Operations
 - `GET /api/v1/ingest/plugins/` - List ingestors
 - `POST /api/v1/ingest/{ingestor}/` - Ingest file data
@@ -90,6 +140,21 @@ Field values containing the separator character are automatically escaped:
 ## Plugin Operations
 - `GET /api/v1/plugins/reporters/` - List reporters
 - `GET /api/v1/plugins/ingestors/` - List ingestors
+
+## Form Operations
+- `GET /api/v1/form/schema/{entity}/` - Get form schema for creating/editing an entity
+  - Returns: Form configuration with field types, validation rules, and options
+  - Response includes field metadata for rendering dynamic forms
+  - Automatically excludes system fields (id, created_at, updated_at) and reverse relations
+  - Response format: `{"entity": "entity_name", "fields": [...], "required_fields": [...]}`
+  - Each field includes: `name`, `type`, `label`, `required`, `description`, `placeholder`, `nullable`
+  - Relation fields include `relation_entity` and `multiple` properties
+  - Enum fields include `options` array with value/label pairs
+- `GET /api/v1/form/options/{entity}/{field_name}/` - Get available options for form fields
+  - Returns options for enum fields and relation field choices
+  - Used by form components for dropdowns and select inputs
+  - For relation fields: Returns `{"options": [{"value": 1, "label": "Display Name"}, ...]}`
+  - For enum fields: Returns `{"options": [{"value": "choice1", "label": "Choice 1"}, ...]}`
 
 ## Entity Options API Details
 

@@ -198,7 +198,6 @@ export async function cachedServerFetch<T>(
   options: RequestInit = {},
   cacheOptions: { revalidate?: number; tags?: string[] } = {}
 ): Promise<ApiResponse<T>> {
-  const client = createServerApiClient();
   const baseUrl = process.env.DJANGO_API_URL || 'http://backend:8000';
   const url = `${baseUrl}${endpoint}`;
 

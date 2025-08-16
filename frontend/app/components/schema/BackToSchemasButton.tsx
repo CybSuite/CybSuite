@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { Button } from '../../../components/ui/button';
-import { ArrowLeft, Database } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 
 export default function BackToSchemasButton() {
 	const router = useRouter();

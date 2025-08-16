@@ -4,7 +4,6 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sortable, SortableContent, SortableItem, SortableItemHandle } from "@/components/ui/sortable";
 import { ArrowUpDown, ArrowUp, ArrowDown, GripVertical, X, Plus } from "lucide-react";
 
@@ -51,22 +50,6 @@ function LocalSortList<TData>({ table, sorting, onSortingChange }: LocalSortList
             setAddColumnOpen(false);
         }
     }, [open]);
-
-    const handleDragEnd = (result: any) => {
-        if (!result.destination) return;
-
-        const sourceIndex = result.source.index;
-        const destinationIndex = result.destination.index;
-
-        if (sourceIndex === destinationIndex) return;
-
-        onSortingChange((prevSorting: any) => {
-            const newSorting = [...prevSorting];
-            const [removed] = newSorting.splice(sourceIndex, 1);
-            newSorting.splice(destinationIndex, 0, removed);
-            return newSorting;
-        });
-    };
 
     return (
         <Popover open={open} onOpenChange={setOpen}>

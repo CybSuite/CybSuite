@@ -45,6 +45,7 @@ export default function RootLayout({
               <main className="flex-1 overflow-auto">
                 <div className="container mx-auto py-6 px-4">
                   {children}
+                  <div id="combobox-portal-container"></div>
                 </div>
               </main>
             </div>
