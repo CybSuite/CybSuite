@@ -8,7 +8,7 @@ import { DataTablePagination } from "@/components/data-table/data-table-paginati
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Trash2, Download, Eye, Pencil, Search, X } from "lucide-react";
+import { Trash2, Download, Eye, Pencil, Search, X, Edit } from "lucide-react";
 import {
     ContextMenu,
     ContextMenuContent,
@@ -56,6 +56,9 @@ export interface CybsuiteTableProps<TData> {
     onRowAction?: (action: string, rows: TData[]) => void;
     tableId?: string;
     initialColumnVisibility?: Record<string, boolean>;
+    // External row selection control
+    rowSelection?: RowSelectionState;
+    onRowSelectionChange?: (rowSelection: RowSelectionState) => void;
 }
 
 export default function CybsuiteTable<TData extends { id?: string | number }>({
@@ -69,7 +72,9 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
     enableGlobalSearch = true,
     onRowAction,
     tableId = "default",
-    initialColumnVisibility = {}
+    initialColumnVisibility = {},
+    rowSelection: externalRowSelection,
+    onRowSelectionChange: externalOnRowSelectionChange
 }: CybsuiteTableProps<TData>) {
 
     // Track if component is mounted to prevent SSR hydration issues
@@ -80,7 +85,26 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
     const [sorting, setSorting] = React.useState<SortingState>([]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
     const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(initialColumnVisibility);
-    const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
+
+    // Use external row selection if provided, otherwise use internal state
+    const [internalRowSelection, setInternalRowSelection] = React.useState<RowSelectionState>({});
+    const rowSelection = externalRowSelection !== undefined ? externalRowSelection : internalRowSelection;
+
+    const handleRowSelectionChange = React.useCallback((updaterOrValue: any) => {
+        if (externalOnRowSelectionChange) {
+            // External control
+            if (typeof updaterOrValue === 'function') {
+                const newValue = updaterOrValue(externalRowSelection || {});
+                externalOnRowSelectionChange(newValue);
+            } else {
+                externalOnRowSelectionChange(updaterOrValue);
+            }
+        } else {
+            // Internal control
+            setInternalRowSelection(updaterOrValue);
+        }
+    }, [externalRowSelection, externalOnRowSelectionChange]);
+
     const [pagination, setPagination] = React.useState<PaginationState>({
         pageIndex: 0,
         pageSize: pageSize,
@@ -94,6 +118,22 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
             pageSize: pageSize,
         }));
     }, [pageSize]);
+
+    // Helper function to convert dict values to searchable strings
+    const dictToString = React.useCallback((value: any): string => {
+        if (value === null || value === undefined) {
+            return '';
+        }
+        if (typeof value === 'object' && !Array.isArray(value)) {
+            // Convert dict to JSON string for searching
+            try {
+                return JSON.stringify(value);
+            } catch {
+                return String(value);
+            }
+        }
+        return String(value);
+    }, []);
 
     // Custom global filter function that handles our advanced filters
     const customGlobalFilterFn = React.useCallback((row: any, columnId: string, filterValue: any) => {
@@ -112,28 +152,29 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
                     try {
                         // Access the cell value from the row data
                         // In TanStack Table's global filter, row is the row data object
+                        // Handle dotted field names (e.g., "details.hello") by direct property access
                         const cellValue = row.original[filter.column];
                         const filterValueToUse = filter.value;
 
                         // Apply different filtering logic based on operator
                         switch (filter.operator) {
                             case 'contains':
-                                return String(cellValue || '').toLowerCase().includes(String(filterValueToUse || '').toLowerCase());
+                                return dictToString(cellValue).toLowerCase().includes(dictToString(filterValueToUse).toLowerCase());
 
                             case 'does_not_contain':
-                                return !String(cellValue || '').toLowerCase().includes(String(filterValueToUse || '').toLowerCase());
+                                return !dictToString(cellValue).toLowerCase().includes(dictToString(filterValueToUse).toLowerCase());
 
                             case 'is':
-                                return String(cellValue || '').toLowerCase() === String(filterValueToUse || '').toLowerCase();
+                                return dictToString(cellValue).toLowerCase() === dictToString(filterValueToUse).toLowerCase();
 
                             case 'is_not':
-                                return String(cellValue || '').toLowerCase() !== String(filterValueToUse || '').toLowerCase();
+                                return dictToString(cellValue).toLowerCase() !== dictToString(filterValueToUse).toLowerCase();
 
                             case 'is_empty':
-                                return !cellValue || String(cellValue).trim() === '';
+                                return !cellValue || dictToString(cellValue).trim() === '';
 
                             case 'is_not_empty':
-                                return cellValue && String(cellValue).trim() !== '';
+                                return cellValue && dictToString(cellValue).trim() !== '';
 
                             case 'equals':
                                 if (!filterValueToUse && filterValueToUse !== 0) return true;
@@ -266,14 +307,15 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
         if (typeof filterValue === 'string') {
             const searchValue = filterValue.toLowerCase();
 
-            // Search across all visible columns
+            // Search across all visible columns in the row data
+            // Since flattened fields are now top-level properties, this should work correctly
             return Object.values(row.original).some((value: any) =>
-                String(value || '').toLowerCase().includes(searchValue)
+                dictToString(value).toLowerCase().includes(searchValue)
             );
         }
 
         return true;
-    }, []);
+    }, [dictToString]);
 
     // Ref for advanced filter reset
     const advancedFilterRef = React.useRef<{ resetFilters: () => void } | null>(null);
@@ -300,7 +342,12 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
             const title = key.charAt(0).toUpperCase() + key.slice(1);
             return {
                 id: key,
-                accessorKey: key,
+                // Use accessor function for fields with dots to handle flattened fields
+                accessorFn: key.includes('.')
+                    ? (row: TData) => row[key as keyof TData]
+                    : undefined,
+                // Use accessorKey for normal fields without dots
+                accessorKey: key.includes('.') ? undefined : key,
                 header: ({ column }) => (
                     enableSorting ? (
                         <DataTableColumnHeader column={column} title={title} />
@@ -377,7 +424,7 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
         onSortingChange: setSorting,
         onColumnFiltersChange: setColumnFilters,
         onColumnVisibilityChange: setColumnVisibility,
-        onRowSelectionChange: setRowSelection,
+        onRowSelectionChange: handleRowSelectionChange,
         onPaginationChange: setPagination,
         onGlobalFilterChange: setGlobalFilter,
         globalFilterFn: customGlobalFilterFn,
@@ -486,6 +533,17 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
             {enableRowSelection && selectedRowsCount > 0 && isMounted && (
                 <DataTableActionBar table={table} visible={selectedRowsCount > 0}>
                     <div className="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                                const selectedRows = table.getFilteredSelectedRowModel().rows.map(row => row.original);
+                                onRowAction?.("bulkUpdate", selectedRows);
+                            }}
+                        >
+                            <Edit className="mr-2 h-4 w-4" />
+                            Bulk Update ({selectedRowsCount})
+                        </Button>
                         <Button
                             variant="outline"
                             size="sm"

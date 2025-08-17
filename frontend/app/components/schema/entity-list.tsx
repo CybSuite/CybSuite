@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { EntitySchema } from '../../types/Data';
 import { EntityCard } from './entity-card';
 import { Button } from '../../../components/ui/button';

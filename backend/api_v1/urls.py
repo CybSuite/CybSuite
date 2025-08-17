@@ -35,11 +35,21 @@ urlpatterns = [
     ),
     path("data/count/<str:entity>/", views.get_entity_count, name="entity_count"),
     path("data/record/<str:entity>/", views.create_record, name="create_record"),
-    path("data/new/<str:entity>/", views.create_new_record, name="create_new_record"),
+    path("data/new/<str:entity>/", views.create_record, name="create_new_record"),
     path("data/feed/<str:entity>/", views.feed_record, name="feed_record"),
     path("data/update/<str:entity>/", views.update_record, name="update_record"),
     path(
         "data/<str:entity>/<int:record_id>/", views.delete_record, name="delete_record"
+    ),
+    path(
+        "data/bulk-delete/<str:entity>/",
+        views.bulk_delete_records,
+        name="bulk_delete_records",
+    ),
+    path(
+        "data/bulk-update/<str:entity>/",
+        views.bulk_update_records,
+        name="bulk_update_records",
     ),
     # Ingest endpoints
     path("ingest/plugins/", views.list_ingestors, name="list_ingestors"),
@@ -49,4 +59,15 @@ urlpatterns = [
     # Plugin endpoints
     path("plugins/reporters/", views.get_reporters, name="get_reporters"),
     path("plugins/ingestors/", views.get_ingestors, name="get_ingestors"),
+    # Form endpoints
+    path(
+        "form/schema/<str:entity>/",
+        views.get_entity_form_schema,
+        name="entity_form_schema",
+    ),
+    path(
+        "form/options/<str:entity>/<str:field_name>/",
+        views.get_entity_form_options,
+        name="entity_form_options",
+    ),
 ]

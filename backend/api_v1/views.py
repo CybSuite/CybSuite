@@ -4,7 +4,11 @@ import os
 import random
 import tempfile
 from functools import reduce
+from typing import Dict
 
+from django.apps import apps
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import IntegrityError
 from django.db.models import Q
 from django.http import FileResponse
 from rest_framework import status
@@ -18,6 +22,12 @@ from .pretty_id_utils import (
     url_decode_pretty_id,
 )
 from .serializers import serialize_model
+from .utils import (
+    apply_dict_flattening,
+    format_validation_error,
+    get_flattened_columns_from_sample_data,
+    map_koalak_type_to_form_type,
+)
 
 # Import the cyberdb_schema (you may need to adjust this import path)
 try:
@@ -91,6 +101,96 @@ def get_entity_schema(request, entity):
 
     try:
         entity_data = cyberdb_schema[entity].to_json()
+
+        # Check if dict flattening is requested
+        flatten_dict_param = request.GET.get("flatten_dict", "false").lower() == "true"
+
+        # Identify dict fields and get flattened columns only if requested
+        if flatten_dict_param:
+            db = CyberDB.from_default_config()
+            if db is not None:
+                entity_desc = cyberdb_schema[entity]
+                dict_field_names = []
+                for field_desc in entity_desc:
+                    if field_desc.annotation is dict or field_desc.annotation is Dict:
+                        dict_field_names.append(field_desc.name)
+
+                if dict_field_names:
+                    # Get flattened columns from sample data
+                    flattened_columns = get_flattened_columns_from_sample_data(
+                        entity, db, dict_field_names
+                    )
+
+                    # The fields structure is a dictionary, not a list
+                    fields_dict = entity_data.get("fields", {})
+
+                    # Add flattened columns as new fields at the position of the original dict fields
+                    # First, collect the flattened columns grouped by their source dict field
+                    dict_field_positions = {}
+                    field_keys = list(fields_dict.keys())
+
+                    for dict_field_name in dict_field_names:
+                        if dict_field_name in field_keys:
+                            dict_field_positions[dict_field_name] = field_keys.index(
+                                dict_field_name
+                            )
+
+                    # Create a new ordered fields dictionary
+                    new_fields_dict = {}
+
+                    for i, (field_name, field_data) in enumerate(fields_dict.items()):
+                        if field_name not in dict_field_names:
+                            # Add non-dict field
+                            new_fields_dict[field_name] = field_data
+                        else:
+                            # This is a dict field - add its flattened columns here instead
+                            for flat_column, flat_type in flattened_columns.items():
+                                if flat_column.startswith(f"{field_name}."):
+                                    display_name = flat_column.replace(".", " ").title()
+
+                                    # Convert inferred type to proper Python class annotation
+                                    if flat_type == "dict":
+                                        annotation = "typing.Dict"
+                                    elif flat_type == "list":
+                                        annotation = "typing.List"
+                                    elif flat_type == "boolean":
+                                        annotation = "<class 'bool'>"
+                                    elif flat_type == "integer":
+                                        annotation = "<class 'int'>"
+                                    elif flat_type == "number":
+                                        annotation = "<class 'float'>"
+                                    elif flat_type == "string":
+                                        annotation = "<class 'str'>"
+                                    elif flat_type == "null":
+                                        annotation = "<class 'NoneType'>"
+                                    else:
+                                        annotation = "<class 'str'>"  # fallback
+
+                                    new_fields_dict[flat_column] = {
+                                        "name": flat_column,
+                                        "pretty_name": display_name,
+                                        "plural_name": display_name + "s",
+                                        "display_name": display_name,
+                                        "dest": None,
+                                        "default": "NOTHING",
+                                        "choices": None,
+                                        "annotation": annotation,
+                                        "description": f"Flattened field from {flat_column.split('.')[0]}",
+                                        "examples": None,
+                                        "element_examples": None,
+                                        "indexed": False,
+                                        "unique": False,
+                                        "nullable": True,
+                                        "hidden_in_list": False,
+                                        "hidden_in_detail": False,
+                                        "in_filter_query": True,
+                                        "is_linked_by_related_name": False,
+                                        "entity": entity,
+                                        "referenced_entity": None,
+                                    }
+
+                    fields_dict = new_fields_dict
+                    entity_data["fields"] = fields_dict
 
         # TODO: remove these temporary placeholders:
         entity_data["category"] = random.choice(example_categories)
@@ -171,6 +271,17 @@ def get_entity_data(request, entity):
         if limit:
             limit = int(limit)
 
+        # Check if dict flattening is requested
+        flatten_dict_param = request.GET.get("flatten_dict", "false").lower() == "true"
+
+        # Identify dict fields for flattening only if requested
+        entity_desc = cyberdb_schema[entity]
+        dict_field_names = []
+        if flatten_dict_param:
+            for field_desc in entity_desc:
+                if field_desc.annotation is dict or field_desc.annotation is Dict:
+                    dict_field_names.append(field_desc.name)
+
         # Get the queryset
         queryset = db.request(entity)
 
@@ -180,7 +291,15 @@ def get_entity_data(request, entity):
                 filter_dict = json.loads(filters)
                 for field, value in filter_dict.items():
                     if value:  # Only apply non-empty filters
-                        queryset = queryset.filter(**{f"{field}__icontains": value})
+                        # Handle flattened field filters (e.g., "details.hello")
+                        if "." in field and any(
+                            field.startswith(f"{df}.") for df in dict_field_names
+                        ):
+                            # This is a flattened field filter - we'll need to apply it after serialization
+                            # For now, skip database-level filtering for flattened fields
+                            continue
+                        else:
+                            queryset = queryset.filter(**{f"{field}__icontains": value})
             except json.JSONDecodeError:
                 return Response(
                     {"error": "Invalid filters format"},
@@ -195,14 +314,18 @@ def get_entity_data(request, entity):
             # Create a Q object for each field to search in
             q_objects = []
             for field in model_fields:
-                # Only search in text and number fields
-                if field.get_internal_type() in [
-                    "CharField",
-                    "TextField",
-                    "IntegerField",
-                    "FloatField",
-                    "DecimalField",
-                ]:
+                # Only search in text and number fields, but skip dict fields since they'll be flattened
+                if (
+                    field.get_internal_type()
+                    in [
+                        "CharField",
+                        "TextField",
+                        "IntegerField",
+                        "FloatField",
+                        "DecimalField",
+                    ]
+                    and field.name not in dict_field_names
+                ):
                     q_objects.append(Q(**{f"{field.name}__icontains": search}))
 
             # Combine all Q objects with OR operator
@@ -222,7 +345,80 @@ def get_entity_data(request, entity):
             serialized = serialize_model(cyberdb_schema, item, entity)
             serialized_items.append(serialized)
 
-        return Response(serialized_items)
+        # Apply dict flattening only if requested
+        if flatten_dict_param and dict_field_names:
+            flattened_items = apply_dict_flattening(serialized_items, dict_field_names)
+        else:
+            flattened_items = serialized_items
+
+        # Apply post-processing filters and search for flattened fields (only if flattening is enabled)
+        if (filters or search) and flatten_dict_param and dict_field_names:
+            filtered_items = []
+            for item in flattened_items:
+                include_item = True
+
+                # Apply flattened field filters
+                if filters:
+                    try:
+                        filter_dict = json.loads(filters)
+                        for field, value in filter_dict.items():
+                            if (
+                                value
+                                and "." in field
+                                and any(
+                                    field.startswith(f"{df}.")
+                                    for df in dict_field_names
+                                )
+                            ):
+                                # Apply filter to flattened field
+                                item_value = item.get(field, "")
+                                if (
+                                    isinstance(item_value, str)
+                                    and value.lower() not in item_value.lower()
+                                ):
+                                    include_item = False
+                                    break
+                                elif (
+                                    not isinstance(item_value, str)
+                                    and value.lower() not in str(item_value).lower()
+                                ):
+                                    include_item = False
+                                    break
+                    except json.JSONDecodeError:
+                        pass
+
+                # Apply search to flattened fields
+                if search and include_item:
+                    search_match_in_flattened = False
+                    for key, value in item.items():
+                        if any(key.startswith(f"{df}.") for df in dict_field_names):
+                            if (
+                                isinstance(value, str)
+                                and search.lower() in value.lower()
+                            ):
+                                search_match_in_flattened = True
+                                break
+                            elif (
+                                not isinstance(value, str)
+                                and search.lower() in str(value).lower()
+                            ):
+                                search_match_in_flattened = True
+                                break
+
+                    # If we had dict fields and search was applied, we need to check if there was a match
+                    # either in regular fields (handled by database query) or in flattened fields
+                    if not search_match_in_flattened:
+                        # Check if the item would have matched in non-dict fields
+                        # If the queryset returned this item, it means it matched non-dict fields
+                        # So we should keep it
+                        pass  # Keep the item
+
+                if include_item:
+                    filtered_items.append(item)
+
+            flattened_items = filtered_items
+
+        return Response(flattened_items)
 
     except Exception as e:
         return Response(
@@ -231,7 +427,7 @@ def get_entity_data(request, entity):
         )
 
 
-@api_view(["GET", "PUT", "PATCH"])
+@api_view(["GET"])
 def get_record_detail(request, entity, pretty_id):
     db = CyberDB.from_default_config()
     if db is None:
@@ -291,34 +487,26 @@ def get_record_detail(request, entity, pretty_id):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        if request.method == "GET":
-            # Serialize and return the object
-            serialized = serialize_model(cyberdb_schema, obj, entity)
-            return Response(serialized)
+        # Serialize and return the object
+        serialized = serialize_model(cyberdb_schema, obj, entity)
 
-        elif request.method == "PUT":
-            # Complete replacement
-            data = request.data
-            data["id"] = obj.id  # Use the actual numeric ID
+        # Check if dict flattening is requested
+        flatten_dict_param = request.GET.get("flatten_dict", "false").lower() == "true"
 
-            # Perform the feed operation (will update existing)
-            updated_obj = db.feed(entity, **data)
-            serialized = serialize_model(cyberdb_schema, updated_obj, entity)
-            return Response(serialized)
+        if flatten_dict_param:
+            # Identify dict fields for flattening
+            entity_desc = cyberdb_schema[entity]
+            dict_field_names = []
+            for field_desc in entity_desc:
+                if field_desc.annotation is dict or field_desc.annotation is Dict:
+                    dict_field_names.append(field_desc.name)
 
-        elif request.method == "PATCH":
-            # Partial update
-            current_data = serialize_model(cyberdb_schema, obj, entity)
-            update_data = request.data
+            if dict_field_names:
+                # Apply dict flattening to the single record
+                flattened_data = apply_dict_flattening([serialized], dict_field_names)
+                serialized = flattened_data[0] if flattened_data else serialized
 
-            # Merge current data with updates
-            merged_data = {**current_data, **update_data}
-            merged_data["id"] = obj.id  # Use the actual numeric ID
-
-            # Perform the feed operation
-            updated_obj = db.feed(entity, **merged_data)
-            serialized = serialize_model(cyberdb_schema, updated_obj, entity)
-            return Response(serialized)
+        return Response(serialized)
 
     except Exception as e:
         return Response(
@@ -442,18 +630,61 @@ def create_record(request, entity):
     try:
         # Get data from request
         data = request.data
+        entity_desc = cyberdb_schema[entity]
+        entity_meta = cyberdb_schema[entity].metadata
+        model = apps.get_model(entity_meta["django_app_label"], entity)
+
+        # Process related fields - separate from creation data
+        create_data = dict(data)  # Copy to avoid modifying original
+        m2m_data = {}
+
+        for field in entity_desc:
+            if field.referenced_entity is None or field.name not in create_data:
+                continue
+
+            field_value = create_data[field.name]
+
+            if field.is_one_to_many_field():
+                # For foreign key fields, use the ID directly
+                if field_value is not None:
+                    create_data[f"{field.name}_id"] = field_value
+                # Remove the field name, keep only the _id version
+                del create_data[field.name]
+            else:
+                # For many-to-many fields, store for later processing
+                if isinstance(field_value, list):
+                    m2m_data[field.name] = field_value
+                    # Remove from create_data since M2M must be set after creation
+                    del create_data[field.name]
+                else:
+                    # Single related object - treat as foreign key
+                    if field_value is not None:
+                        create_data[f"{field.name}_id"] = field_value
+                    del create_data[field.name]
 
         # Create new record (ensure no ID is passed for creation)
-        if "id" in data:
-            del data["id"]
+        if "id" in create_data:
+            del create_data["id"]
 
-        # Perform the feed operation to create
-        obj = db.feed(entity, **data)
+        # Create the object with processed data
+        obj = model.objects.create(**create_data)
+
+        # Handle many-to-many relationships after creation
+        for field_name, related_ids in m2m_data.items():
+            if hasattr(obj, field_name):
+                m2m_field = getattr(obj, field_name)
+                if related_ids:
+                    m2m_field.set(related_ids)
+                else:
+                    m2m_field.clear()
 
         # Serialize the resulting object
         serialized = serialize_model(cyberdb_schema, obj, entity)
         return Response(serialized, status=status.HTTP_201_CREATED)
 
+    except (DjangoValidationError, IntegrityError) as e:
+        error_response = format_validation_error(e, entity)
+        return Response(error_response, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         return Response(
             {"error": f"Error creating record: {str(e)}"},
@@ -461,13 +692,7 @@ def create_record(request, entity):
         )
 
 
-@api_view(["POST"])
-def create_new_record(request, entity):
-    """Create a new entry in an entity"""
-    return create_record(request, entity)
-
-
-@api_view(["POST"])
+@api_view(["PUT", "PATCH"])
 def update_record(request, entity):
     """Update records in an entity"""
     db = CyberDB.from_default_config()
@@ -480,6 +705,9 @@ def update_record(request, entity):
     try:
         # Get data from request
         data = request.data
+        entity_desc = cyberdb_schema[entity]
+        entity_meta = cyberdb_schema[entity].metadata
+        model = apps.get_model(entity_meta["django_app_label"], entity)
 
         # Ensure ID is provided for update
         if "id" not in data:
@@ -489,22 +717,101 @@ def update_record(request, entity):
             )
 
         record_id = data["id"]
+        entity_desc = cyberdb_schema[entity]
+
+        # Filter out fields that are linked by related name (reverse foreign keys)
+        # These are read-only computed fields and should not be updated
+        filtered_data = {}
+        for key, value in data.items():
+            if key in ["id", "pretty_id"]:
+                continue
+
+            # Check if this field exists in the entity schema and is not a reverse relation
+            field_desc = None
+            for field in entity_desc:
+                if field.name == key:
+                    field_desc = field
+                    break
+
+            # Skip fields that are linked by related name (reverse foreign keys)
+            if field_desc and field_desc.is_linked_by_related_name:
+                continue
+
+            # Include the field if it's a valid entity field
+            if field_desc:
+                filtered_data[key] = value
+            else:
+                print(f"Warning: Field '{key}' not found in entity schema, skipping")
 
         # Check if record exists
-        obj = db.first(entity, id=record_id)
-        if obj is None:
+        obj = model.objects.get(pk=record_id)
+
+        if not obj:
             return Response(
                 {"error": f"Record with id {record_id} not found in entity {entity}"},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Perform the feed operation
-        updated_obj = db.feed(entity, **data)
+        # Separate many-to-many fields from other fields
+        m2m_updates = {}
+
+        # Process related fields and update the object
+        for field in entity_desc:
+            if (
+                field.referenced_entity is None
+                or field.name not in filtered_data.keys()
+            ):
+                continue
+            if field.is_linked_by_related_name:
+                continue
+
+            field_value = filtered_data[field.name]
+
+            if field.is_one_to_many_field():
+                # For foreign key fields, assign the ID instead of the object
+                if field_value is not None:
+                    setattr(obj, f"{field.name}_id", field_value)
+                else:
+                    setattr(obj, field.name, None)
+                # Remove from filtered_data since we handled it
+                del filtered_data[field.name]
+            else:
+                # For many-to-many fields, store for later processing
+                if isinstance(field_value, list):
+                    m2m_updates[field.name] = field_value
+                    # Remove from filtered_data since we'll handle it separately
+                    del filtered_data[field.name]
+                else:
+                    # Single related object - treat as foreign key
+                    if field_value is not None:
+                        setattr(obj, f"{field.name}_id", field_value)
+                    else:
+                        setattr(obj, field.name, None)
+                    del filtered_data[field.name]
+
+        # Update non-related fields
+        for field, value in filtered_data.items():
+            setattr(obj, field, value)
+
+        # Save the object first
+        obj.save()
+
+        # Handle many-to-many relationships after saving
+        for field_name, related_ids in m2m_updates.items():
+            if hasattr(obj, field_name):
+                m2m_field = getattr(obj, field_name)
+                if related_ids:
+                    m2m_field.set(related_ids)
+                else:
+                    m2m_field.clear()
 
         # Serialize the resulting object
-        serialized = serialize_model(cyberdb_schema, updated_obj, entity)
+        serialized = serialize_model(cyberdb_schema, obj, entity)
         return Response(serialized)
 
+    except (DjangoValidationError, IntegrityError) as e:
+        error_response = format_validation_error(e, entity)
+        return Response(error_response, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         return Response(
             {"error": f"Error updating record: {str(e)}"},
@@ -572,6 +879,299 @@ def delete_record(request, entity, record_id):
     except Exception as e:
         return Response(
             {"error": f"Error deleting record: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["DELETE"])
+def bulk_delete_records(request, entity):
+    """Delete multiple records by their IDs"""
+    db = CyberDB.from_default_config()
+    if db is None:
+        return Response(
+            {"error": "Database not available"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    try:
+        # Get the list of IDs from request body
+        record_ids = request.data.get("ids", [])
+
+        if not record_ids:
+            return Response(
+                {"error": "No record IDs provided"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not isinstance(record_ids, list):
+            return Response(
+                {"error": "IDs must be provided as a list"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Track results
+        deleted_ids = []
+        failed_ids = []
+        errors = []
+
+        # Delete each record
+        for record_id in record_ids:
+            try:
+                obj = db.first(entity, id=record_id)
+                if obj is None:
+                    failed_ids.append(record_id)
+                    errors.append(f"Record {record_id} not found")
+                    continue
+
+                obj.delete()
+                deleted_ids.append(record_id)
+
+            except Exception as e:
+                failed_ids.append(record_id)
+                errors.append(f"Error deleting record {record_id}: {str(e)}")
+
+        # Prepare response
+        response_data = {
+            "status": "completed",
+            "deleted_count": len(deleted_ids),
+            "failed_count": len(failed_ids),
+            "deleted_ids": deleted_ids,
+            "failed_ids": failed_ids,
+            "errors": errors,
+        }
+
+        # Determine HTTP status based on results
+        if len(deleted_ids) == len(record_ids):
+            # All records deleted successfully
+            response_data[
+                "message"
+            ] = f"Successfully deleted {len(deleted_ids)} records from entity {entity}"
+            return Response(response_data, status=status.HTTP_200_OK)
+        elif len(deleted_ids) > 0:
+            # Partial success
+            response_data[
+                "message"
+            ] = f"Partially completed: deleted {len(deleted_ids)} records, failed to delete {len(failed_ids)} records"
+            return Response(response_data, status=status.HTTP_207_MULTI_STATUS)
+        else:
+            # All failed
+            response_data[
+                "message"
+            ] = f"Failed to delete any records from entity {entity}"
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+    except Exception as e:
+        return Response(
+            {"error": f"Error processing bulk delete: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["POST"])
+def bulk_update_records(request, entity):
+    """Update multiple records with the same values, only for fields without unique/index constraints"""
+    db = CyberDB.from_default_config()
+    if db is None:
+        return Response(
+            {"error": "Database not available"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    try:
+        # Get the data from request body
+        request_data = request.data
+        record_ids = request_data.get("ids", [])
+        update_data = request_data.get("data", {})
+
+        if not record_ids:
+            return Response(
+                {"error": "No record IDs provided"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not isinstance(record_ids, list):
+            return Response(
+                {"error": "IDs must be provided as a list"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not update_data:
+            return Response(
+                {"error": "No update data provided"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate entity exists
+        try:
+            entity_desc = cyberdb_schema[entity]
+        except KeyError:
+            return Response(
+                {"error": f"Entity '{entity}' not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Filter out fields with unique or index constraints
+        allowed_fields = {}
+        forbidden_fields = []
+
+        for field_name, field_value in update_data.items():
+            if field_name in ["id", "pretty_id"]:
+                forbidden_fields.append(f"{field_name} (read-only)")
+                continue
+
+            # Find the field in schema
+            field_desc = None
+            for field in entity_desc:
+                if field.name == field_name:
+                    field_desc = field
+                    break
+
+            if not field_desc:
+                forbidden_fields.append(f"{field_name} (field not found)")
+                continue
+
+            # Skip fields that are linked by related name (reverse foreign keys)
+            if field_desc.is_linked_by_related_name:
+                forbidden_fields.append(f"{field_name} (reverse relation)")
+                continue
+
+            # Check for unique or index constraints
+            if field_desc.unique or field_desc.indexed:
+                forbidden_fields.append(f"{field_name} (unique/indexed field)")
+                continue
+
+            # Field is allowed for bulk update
+            allowed_fields[field_name] = field_value
+
+        if forbidden_fields:
+            return Response(
+                {
+                    "error": "Some fields cannot be bulk updated",
+                    "forbidden_fields": forbidden_fields,
+                    "allowed_fields": list(allowed_fields.keys()),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not allowed_fields:
+            return Response(
+                {"error": "No valid fields provided for bulk update"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Track results
+        updated_ids = []
+        failed_ids = []
+        errors = []
+
+        # Update each record
+        for record_id in record_ids:
+            try:
+                obj = db.first(entity, id=record_id)
+                if obj is None:
+                    failed_ids.append(record_id)
+                    errors.append(f"Record {record_id} not found")
+                    continue
+
+                # Prepare the update data for this record
+                filtered_data = allowed_fields.copy()
+
+                # Separate many-to-many fields from other fields
+                m2m_updates = {}
+
+                # Process related fields and update the object
+                for field in entity_desc:
+                    if (
+                        field.referenced_entity is None
+                        or field.name not in filtered_data.keys()
+                    ):
+                        continue
+                    if field.is_linked_by_related_name:
+                        continue
+
+                    field_value = filtered_data[field.name]
+
+                    if field.is_one_to_many_field():
+                        # For foreign key fields, assign the ID instead of the object
+                        if field_value is not None:
+                            setattr(obj, f"{field.name}_id", field_value)
+                        else:
+                            setattr(obj, field.name, None)
+                        # Remove from filtered_data since we handled it
+                        del filtered_data[field.name]
+                    elif field.is_many_to_many_field():
+                        # For many-to-many fields, store for later processing
+                        m2m_updates[field.name] = field_value
+                        # Remove from filtered_data since we'll handle it separately
+                        del filtered_data[field.name]
+
+                # Update the remaining non-relational fields
+                for field_name, field_value in filtered_data.items():
+                    setattr(obj, field_name, field_value)
+
+                # Save the object first for foreign key updates
+                obj.save()
+
+                # Handle many-to-many field updates after saving
+                for field_name, field_value in m2m_updates.items():
+                    if field_value is not None:
+                        # Get the many-to-many manager
+                        m2m_manager = getattr(obj, field_name)
+                        # Clear existing relationships
+                        m2m_manager.clear()
+                        # Set new relationships if there are any
+                        if field_value:
+                            m2m_manager.set(field_value)
+
+                updated_ids.append(record_id)
+
+            except (DjangoValidationError, IntegrityError) as e:
+                failed_ids.append(record_id)
+                error_details = format_validation_error(e, entity)
+                errors.append(
+                    f"Record {record_id}: {error_details.get('error', str(e))}"
+                )
+            except Exception as e:
+                failed_ids.append(record_id)
+                errors.append(f"Error updating record {record_id}: {str(e)}")
+
+        # Prepare response
+        response_data = {
+            "status": "completed",
+            "updated_count": len(updated_ids),
+            "failed_count": len(failed_ids),
+            "updated_ids": updated_ids,
+            "failed_ids": failed_ids,
+            "errors": errors,
+            "updated_fields": list(allowed_fields.keys()),
+        }
+
+        # Determine HTTP status based on results
+        if len(updated_ids) == len(record_ids):
+            # All records updated successfully
+            response_data[
+                "message"
+            ] = f"Successfully updated {len(updated_ids)} records in entity {entity}"
+            return Response(response_data, status=status.HTTP_200_OK)
+        elif len(updated_ids) > 0:
+            # Partial success
+            response_data[
+                "message"
+            ] = f"Partially completed: updated {len(updated_ids)} records, failed to update {len(failed_ids)} records"
+            return Response(response_data, status=status.HTTP_207_MULTI_STATUS)
+        else:
+            # All failed
+            response_data[
+                "message"
+            ] = f"Failed to update any records in entity {entity}"
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+    except (DjangoValidationError, IntegrityError) as e:
+        error_response = format_validation_error(e, entity)
+        return Response(error_response, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response(
+            {"error": f"Error processing bulk update: {str(e)}"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
@@ -781,5 +1381,241 @@ def get_schema_tags(request):
     except Exception as e:
         return Response(
             {"error": f"Error fetching tags: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["GET"])
+def get_entity_form_schema(request, entity):
+    """Get form schema for creating/editing an entity"""
+    if cyberdb_schema is None:
+        return Response(
+            {"error": "Schema not available"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    try:
+        # Get the entity schema
+        entity_schema = cyberdb_schema[entity]
+        if not entity_schema:
+            return Response(
+                {"error": f"Entity '{entity}' not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        form_schema = {
+            "entity": entity,
+            "fields": [],
+            "required_fields": [],
+        }
+
+        # Process fields
+        for field_name, field_desc in entity_schema._fields.items():
+            # Skip system fields like id, created_at, updated_at
+            if field_name in ["id", "created_at", "updated_at"]:
+                continue
+
+            if field_desc.is_linked_by_related_name:
+                continue
+
+            # Map koalak field types to form field types
+            field_type = map_koalak_type_to_form_type(field_desc)
+            field_required = field_desc.required
+
+            # Build field schema
+            field_schema = {
+                "name": field_name,
+                "type": field_type,
+                "label": field_desc.display_name
+                or field_name.replace("_", " ").title(),
+                "required": field_required,
+                "description": field_desc.description or "",
+                "placeholder": "",
+                "nullable": field_desc.nullable,
+            }
+
+            # Add type-specific configurations based on field type
+            if field_type == "relation":
+                field_schema["relation_entity"] = (
+                    field_desc.referenced_entity.name
+                    if field_desc.referenced_entity
+                    else None
+                )
+                field_schema["multiple"] = field_desc.is_sequence()
+            elif field_type == "enum" and field_desc.choices:
+                field_schema["options"] = [
+                    {"value": choice, "label": choice} for choice in field_desc.choices
+                ]
+            elif field_type == "boolean":
+                # Use field default value
+                default_value = field_desc.get_default()
+                if default_value is not None and default_value != field_desc.NOTHING:
+                    field_schema["default"] = bool(default_value)
+                else:
+                    field_schema["default"] = False
+            elif field_type in ["integer", "number"]:
+                field_schema["min"] = field_desc.min
+                field_schema["max"] = field_desc.max
+                field_schema["step"] = 1 if field_type == "integer" else "any"
+            elif field_type in ["string", "text", "email", "url"]:
+                field_schema["max_length"] = field_desc.max_length
+                field_schema[
+                    "min_length"
+                ] = None  # Can be added to FieldDescription if needed
+                field_schema[
+                    "pattern"
+                ] = None  # Can be added to FieldDescription if needed
+
+            # Set default value if available and valid
+            default_value = field_desc.get_default()
+            if (
+                default_value is not None
+                and default_value != field_desc.NOTHING
+                and default_value != ""
+            ):
+                field_schema["default"] = default_value
+
+            form_schema["fields"].append(field_schema)
+
+            if field_schema["required"]:
+                form_schema["required_fields"].append(field_name)
+
+        return Response(form_schema)
+
+    except Exception as e:
+        return Response(
+            {"error": f"Error generating form schema: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["GET"])
+def get_entity_form_options(request, entity, field_name):
+    """Get available options for relation fields"""
+    if cyberdb_schema is None:
+        return Response(
+            {"error": "Schema not available"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    try:
+        # Get the entity schema
+        entity_schema = cyberdb_schema[entity]
+        if not entity_schema:
+            return Response(
+                {"error": f"Entity '{entity}' not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        entity_data = entity_schema.to_json()
+        field_data = entity_data.get("fields", {}).get(field_name)
+
+        if not field_data:
+            return Response(
+                {"error": f"Field '{field_name}' not found in entity '{entity}'"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Handle different field types that need options
+        if field_data.get("referenced_entity"):
+            # Get related entity records using the existing options endpoint
+            related_entity = field_data.get("referenced_entity")
+            if not related_entity:
+                return Response(
+                    {"error": f"No related entity specified for field '{field_name}'"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Get data from the database using the entity options endpoint
+            db = CyberDB.from_default_config()
+            if db is None:
+                return Response(
+                    {"error": "Database not available"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            # Get query parameters for search and limit
+            limit = int(request.GET.get("limit", 100))
+            search = request.GET.get("search")
+
+            # Get the queryset
+            queryset = db.request(related_entity)
+
+            # Apply search if provided
+            if search:
+                # Get entity schema for search fields
+                related_entity_schema = cyberdb_schema[related_entity]
+                search_fields = []
+
+                # Find text fields for searching
+                for fname, fdata in (
+                    related_entity_schema.to_json().get("fields", {}).items()
+                ):
+                    if fdata.get("type") in ["string", "text"]:
+                        search_fields.append(fname)
+
+                if search_fields:
+                    # Create search query
+                    search_queries = [
+                        Q(**{f"{field}__icontains": search}) for field in search_fields
+                    ]
+                    search_query = reduce(operator.or_, search_queries)
+                    queryset = queryset.filter(search_query)
+
+            # Apply limit
+            queryset = queryset[:limit]
+
+            # Convert to list and create options
+            items = list(queryset)
+            options = []
+
+            for item in items:
+                # Try to get a meaningful representation
+                display_value = str(item)
+
+                # Try common display fields first
+                for field in ["name", "title", "display_name", "label"]:
+                    if hasattr(item, field):
+                        display_value = getattr(item, field)
+                        break
+
+                options.append(
+                    {
+                        "value": item.id,
+                        "label": display_value,
+                    }
+                )
+
+            return Response(
+                {
+                    "field": field_name,
+                    "type": "relation",
+                    "entity": related_entity,
+                    "options": options,
+                }
+            )
+
+        elif field_data.get("choices"):
+            # Return enum values
+            values = field_data.get("choices", [])
+            options = [{"value": val, "label": val} for val in values]
+
+            return Response(
+                {
+                    "field": field_name,
+                    "type": "enum",
+                    "options": options,
+                }
+            )
+
+        else:
+            return Response(
+                {"error": f"Field '{field_name}' does not support options"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    except Exception as e:
+        return Response(
+            {"error": f"Error fetching field options: {str(e)}"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )

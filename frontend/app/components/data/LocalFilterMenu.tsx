@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-    Combobox,
     ComboboxAnchor,
     ComboboxBadgeItem,
     ComboboxBadgeList,
@@ -17,6 +16,7 @@ import {
     ComboboxItem,
     ComboboxTrigger,
 } from "@/components/ui/combobox";
+import { Root } from "@diceui/combobox";
 import { Filter, Plus, X, ChevronDown } from "lucide-react";
 
 interface LocalFilterMenuProps {
@@ -38,14 +38,6 @@ const LocalFilterMenu = React.forwardRef<
             return table.getAllColumns().filter((column: any) =>
                 column.columnDef.enableColumnFilter && column.columnDef.meta?.label
             );
-        } catch {
-            return [];
-        }
-    }, [table]);
-
-    const activeFilters = React.useMemo(() => {
-        try {
-            return table.getState().columnFilters;
         } catch {
             return [];
         }
@@ -180,11 +172,16 @@ const LocalFilterMenu = React.forwardRef<
 
             return (
                 <div className="space-y-2">
-                    <Combobox
+                    <Root
                         value={selectedValues}
                         onValueChange={(newValues: string[]) => updateFilter(filter.id, 'value', newValues)}
                         multiple
                         autoHighlight
+                        onFilter={((ids: string[], inputValue: string) => {
+                            return ids.filter((id) =>
+                                options.find((item: any) => item.value === id).label.toLowerCase().includes(inputValue.toLowerCase() || '')
+                            )
+                        })}
                     >
                         <ComboboxAnchor className="h-full min-h-10 flex-wrap px-3 py-2">
                             <ComboboxBadgeList>
@@ -198,8 +195,8 @@ const LocalFilterMenu = React.forwardRef<
                                 })}
                             </ComboboxBadgeList>
                             <ComboboxInput
-                              placeholder="Select..."
-                              className="h-auto min-w-20 flex-1"
+                                placeholder="Select..."
+                                className="h-auto min-w-20 flex-1"
                             />
                             <ComboboxTrigger className="absolute top-3 right-2">
                                 <ChevronDown className="h-4 w-4" />
@@ -214,7 +211,7 @@ const LocalFilterMenu = React.forwardRef<
                                 </ComboboxItem>
                             ))}
                         </ComboboxContent>
-                    </Combobox>
+                    </Root>
                 </div>
             );
         }

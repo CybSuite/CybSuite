@@ -1,17 +1,28 @@
 // API configuration and utilities for connecting to Django backend
-import { HealthCheckResponse, TestResponse, SystemInfoResponse, HealthRootResponse } from '../types/HealthCheck';
-import { NavigationResponse } from '../types/Navigation';
-import { EntityRecord, EntitySchema, DataCountResponse, FieldSchema, FullSchemaResponse } from '../types/Data';
+import {
+  HealthCheckResponse,
+  TestResponse,
+  SystemInfoResponse,
+  HealthRootResponse,
+} from "../types/HealthCheck";
+import { NavigationResponse } from "../types/Navigation";
+import {
+  EntityRecord,
+  EntitySchema,
+  DataCountResponse,
+  FieldSchema,
+  FullSchemaResponse,
+} from "../types/Data";
 
 // Get the appropriate base URL based on environment
 export function getApiBaseUrl(): string {
   // Server-side: use internal URL
-  if (typeof window === 'undefined') {
-    const serverUrl = process.env.DJANGO_API_URL || 'http://backend:8000';
+  if (typeof window === "undefined") {
+    const serverUrl = process.env.DJANGO_API_URL || "http://backend:8000";
     return serverUrl;
   }
   // Client-side: use public URL
-  const clientUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  const clientUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   return clientUrl;
 }
 
@@ -21,6 +32,9 @@ export interface ApiResponse<T = any> {
   data?: T;
   error?: string;
   status: number;
+  // Enhanced error fields for validation errors
+  field_errors?: Record<string, string[]>;
+  details?: string[] | string;
 }
 
 export class ApiClient {
@@ -38,11 +52,13 @@ export class ApiClient {
 
     const config: RequestInit = {
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         ...options.headers,
       },
       // Only include credentials on client-side
-      ...(typeof window !== 'undefined' && { credentials: 'include' as RequestCredentials }),
+      ...(typeof window !== "undefined" && {
+        credentials: "include" as RequestCredentials,
+      }),
       ...options,
     };
 
@@ -50,13 +66,15 @@ export class ApiClient {
       const response = await fetch(url, config);
 
       // Check if response is JSON
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
         const text = await response.text();
-        console.error('Non-JSON response:', text.substring(0, 200));
+        console.error("Non-JSON response:", text.substring(0, 200));
         return {
           data: undefined,
-          error: `Expected JSON response but got ${contentType || 'unknown'}. Response: ${text.substring(0, 100)}...`,
+          error: `Expected JSON response but got ${
+            contentType || "unknown"
+          }. Response: ${text.substring(0, 100)}...`,
           status: response.status,
         };
       }
@@ -64,11 +82,28 @@ export class ApiClient {
       const data = await response.json();
 
       if (!response.ok) {
-        return {
+        // Handle enhanced error responses from backend
+        const errorResponse: ApiResponse<T> = {
           data: undefined,
-          error: data.message || `HTTP error! status: ${response.status}`,
           status: response.status,
         };
+
+        // Check if backend returned structured validation errors
+        if (data.field_errors) {
+          errorResponse.field_errors = data.field_errors;
+          errorResponse.error = data.error || "Validation failed";
+        } else if (data.details) {
+          errorResponse.details = data.details;
+          errorResponse.error = data.error || "Request failed";
+        } else {
+          // Fallback to simple error message
+          errorResponse.error =
+            data.error ||
+            data.message ||
+            `HTTP error! status: ${response.status}`;
+        }
+
+        return errorResponse;
       }
 
       return {
@@ -79,37 +114,47 @@ export class ApiClient {
     } catch (error) {
       return {
         data: undefined,
-        error: error instanceof Error ? error.message : 'Network error',
+        error: error instanceof Error ? error.message : "Network error",
         status: 0,
       };
     }
   }
 
   async get<T>(endpoint: string): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, { method: 'GET' });
+    return this.request<T>(endpoint, { method: "GET" });
   }
 
   async post<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
-      method: 'POST',
+      method: "POST",
       body: data ? JSON.stringify(data) : undefined,
     });
   }
 
   async put<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
-      method: 'PUT',
+      method: "PUT",
       body: data ? JSON.stringify(data) : undefined,
     });
   }
 
   async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, { method: 'DELETE' });
+    return this.request<T>(endpoint, { method: "DELETE" });
+  }
+
+  async deleteWithBody<T>(
+    endpoint: string,
+    data?: any
+  ): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: "DELETE",
+      body: data ? JSON.stringify(data) : undefined,
+    });
   }
 
   async patch<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
-      method: 'PATCH',
+      method: "PATCH",
       body: data ? JSON.stringify(data) : undefined,
     });
   }
@@ -120,7 +165,7 @@ export const apiClient = new ApiClient(API_BASE_URL);
 
 // Server-side API client factory (for use in Server Components, API routes, etc.)
 export function createServerApiClient(cookies?: string): ApiClient {
-  const serverUrl = process.env.DJANGO_API_URL || 'http://backend:8000';
+  const serverUrl = process.env.DJANGO_API_URL || "http://backend:8000";
 
   // Create a custom API client that includes cookies
   class ServerApiClient extends ApiClient {
@@ -128,12 +173,15 @@ export function createServerApiClient(cookies?: string): ApiClient {
       super(baseUrl);
     }
 
-    protected async request<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+    protected async request<T>(
+      endpoint: string,
+      options: RequestInit = {}
+    ): Promise<ApiResponse<T>> {
       const config: RequestInit = {
         ...options,
         headers: {
           ...options.headers,
-          ...(this.cookieHeader && { 'Cookie': this.cookieHeader }),
+          ...(this.cookieHeader && { Cookie: this.cookieHeader }),
         },
       };
       return super.request(endpoint, config);
@@ -147,79 +195,179 @@ export function createServerApiClient(cookies?: string): ApiClient {
 export const api = {
   // Navigation endpoints
   navigation: {
-    getNavigation: () => apiClient.get<NavigationResponse>('/api/v1/nav_links/'),
+    getNavigation: () =>
+      apiClient.get<NavigationResponse>("/api/v1/nav_links/"),
   },
 
   // Schema endpoints
   schema: {
-    getSchemaNames: () => apiClient.get<string[]>('/api/v1/schema/names/'),
-    getFullSchema: () => apiClient.get<FullSchemaResponse>('/api/v1/schema/full/'),
-    getEntitySchema: (entity: string) => apiClient.get<EntitySchema>(`/api/v1/schema/entity/${entity}/`),
-    getEntityFieldNames: (entity: string) => apiClient.get<string[]>(`/api/v1/schema/entity/${entity}/names/`),
-    getFieldDetails: (entity: string, field: string) => apiClient.get<FieldSchema>(`/api/v1/schema/field/${entity}/${field}/`),
-    getCategories: () => apiClient.get<string[]>('/api/v1/schema/categories/'),
-    getTags: () => apiClient.get<string[]>('/api/v1/schema/tags/'),
+    getSchemaNames: () => apiClient.get<string[]>("/api/v1/schema/names/"),
+    getFullSchema: () =>
+      apiClient.get<FullSchemaResponse>("/api/v1/schema/full/"),
+    getEntitySchema: (entity: string, flattenDict = false) => {
+      const params = flattenDict ? "?flatten_dict=true" : "";
+      return apiClient.get<EntitySchema>(
+        `/api/v1/schema/entity/${entity}/${params}`
+      );
+    },
+    getEntityFieldNames: (entity: string) =>
+      apiClient.get<string[]>(`/api/v1/schema/entity/${entity}/names/`),
+    getFieldDetails: (entity: string, field: string) =>
+      apiClient.get<FieldSchema>(`/api/v1/schema/field/${entity}/${field}/`),
+    getCategories: () => apiClient.get<string[]>("/api/v1/schema/categories/"),
+    getTags: () => apiClient.get<string[]>("/api/v1/schema/tags/"),
+  },
+
+  // Form endpoints
+  form: {
+    getFormSchema: (entity: string) =>
+      apiClient.get<any>(`/api/v1/form/schema/${entity}/`),
+    getFieldOptions: (entity: string, fieldName: string) =>
+      apiClient.get<any>(`/api/v1/form/options/${entity}/${fieldName}/`),
   },
 
   // Data endpoints
   data: {
-    getEntityData: (entity: string, params?: { skip?: number; limit?: number; search?: string; filters?: string }) => {
+    getEntityData: (
+      entity: string,
+      params?: {
+        skip?: number;
+        limit?: number;
+        search?: string;
+        filters?: string;
+        flattenDict?: boolean;
+      }
+    ) => {
       const searchParams = new URLSearchParams();
-      if (params?.skip !== undefined) searchParams.set('skip', params.skip.toString());
-      if (params?.limit !== undefined) searchParams.set('limit', params.limit.toString());
-      if (params?.search) searchParams.set('search', params.search);
-      if (params?.filters) searchParams.set('filters', params.filters);
+      if (params?.skip !== undefined)
+        searchParams.set("skip", params.skip.toString());
+      if (params?.limit !== undefined)
+        searchParams.set("limit", params.limit.toString());
+      if (params?.search) searchParams.set("search", params.search);
+      if (params?.filters) searchParams.set("filters", params.filters);
+      if (params?.flattenDict) searchParams.set("flatten_dict", "true");
 
       const queryString = searchParams.toString();
-      const endpoint = `/api/v1/data/entity/${entity}/${queryString ? `?${queryString}` : ''}`;
+      const endpoint = `/api/v1/data/entity/${entity}/${
+        queryString ? `?${queryString}` : ""
+      }`;
       return apiClient.get<EntityRecord[]>(endpoint);
     },
-    getEntityOptions: (entity: string, params?: { limit?: number; search?: string }) => {
+    getEntityOptions: (
+      entity: string,
+      params?: { limit?: number; search?: string }
+    ) => {
       const searchParams = new URLSearchParams();
-      if (params?.limit !== undefined) searchParams.set('limit', params.limit.toString());
-      if (params?.search) searchParams.set('search', params.search);
+      if (params?.limit !== undefined)
+        searchParams.set("limit", params.limit.toString());
+      if (params?.search) searchParams.set("search", params.search);
 
       const queryString = searchParams.toString();
-      const endpoint = `/api/v1/data/options/${entity}/${queryString ? `?${queryString}` : ''}`;
-      return apiClient.get<Array<{ id: string | number; repr: string }>>(endpoint);
+      const endpoint = `/api/v1/data/options/${entity}/${
+        queryString ? `?${queryString}` : ""
+      }`;
+      return apiClient.get<Array<{ id: string | number; repr: string }>>(
+        endpoint
+      );
     },
-    getRecord: (entity: string, id: string | number) => apiClient.get<EntityRecord>(`/api/v1/data/record/${entity}/${id}/`),
-    getRecordDetail: (entity: string, id: string | number) => apiClient.get<EntityRecord>(`/api/v1/data/record/${entity}/${id}/`),
-    createRecord: (entity: string, data: Partial<EntityRecord>) => apiClient.post<EntityRecord>(`/api/v1/data/record/${entity}/`, data),
-    updateRecord: (entity: string, id: string | number, data: Partial<EntityRecord>) => apiClient.put<EntityRecord>(`/api/v1/data/record/${entity}/${id}/`, data),
-    patchRecord: (entity: string, id: string | number, data: Partial<EntityRecord>) => apiClient.patch<EntityRecord>(`/api/v1/data/record/${entity}/${id}/`, data),
-    deleteRecord: (entity: string, id: string | number) => apiClient.delete<{ success: boolean }>(`/api/v1/data/${entity}/${id}/`),
-    getCount: (entity: string) => apiClient.get<DataCountResponse>(`/api/v1/data/count/${entity}/`),
-    createNew: (entity: string, data: Partial<EntityRecord>) => apiClient.post<EntityRecord>(`/api/v1/data/new/${entity}/`, data),
-    upsertRecord: (entity: string, data: Partial<EntityRecord>) => apiClient.post<EntityRecord>(`/api/v1/data/feed/${entity}/`, data),
-    updateByData: (entity: string, data: Partial<EntityRecord> & { id: string | number }) => apiClient.post<EntityRecord>(`/api/v1/data/update/${entity}/`, data),
+    getRecord: (entity: string, id: string | number, flattenDict = false) => {
+      const params = flattenDict ? "?flatten_dict=true" : "";
+      return apiClient.get<EntityRecord>(
+        `/api/v1/data/record/${entity}/${id}/${params}`
+      );
+    },
+    getRecordDetail: (
+      entity: string,
+      id: string | number,
+      flattenDict = false
+    ) => {
+      const params = flattenDict ? "?flatten_dict=true" : "";
+      return apiClient.get<EntityRecord>(
+        `/api/v1/data/record/${entity}/${id}/${params}`
+      );
+    },
+    createRecord: (entity: string, data: Partial<EntityRecord>) =>
+      apiClient.post<EntityRecord>(`/api/v1/data/record/${entity}/`, data),
+    updateRecord: (
+      entity: string,
+      id: string | number,
+      data: Partial<EntityRecord>
+    ) => apiClient.put<EntityRecord>(`/api/v1/data/update/${entity}/`, data),
+    patchRecord: (
+      entity: string,
+      id: string | number,
+      data: Partial<EntityRecord>
+    ) => apiClient.patch<EntityRecord>(`/api/v1/data/record/${entity}/`, data),
+    deleteRecord: (entity: string, id: string | number) =>
+      apiClient.delete<{ success: boolean }>(`/api/v1/data/${entity}/${id}/`),
+    bulkDeleteRecords: (entity: string, ids: (string | number)[]) =>
+      apiClient.deleteWithBody<{
+        status: string;
+        deleted_count: number;
+        failed_count: number;
+        deleted_ids: (string | number)[];
+        failed_ids: (string | number)[];
+        errors: string[];
+        message: string;
+      }>(`/api/v1/data/bulk-delete/${entity}/`, { ids }),
+    bulkUpdateRecords: (
+      entity: string,
+      ids: (string | number)[],
+      data: Partial<EntityRecord>
+    ) =>
+      apiClient.post<{
+        status: string;
+        updated_count: number;
+        failed_count: number;
+        updated_ids: (string | number)[];
+        failed_ids: (string | number)[];
+        errors: string[];
+        updated_fields: string[];
+        message: string;
+      }>(`/api/v1/data/bulk-update/${entity}/`, { ids, data }),
+    getCount: (entity: string) =>
+      apiClient.get<DataCountResponse>(`/api/v1/data/count/${entity}/`),
+    createNew: (entity: string, data: Partial<EntityRecord>) =>
+      apiClient.post<EntityRecord>(`/api/v1/data/new/${entity}/`, data),
+    upsertRecord: (entity: string, data: Partial<EntityRecord>) =>
+      apiClient.post<EntityRecord>(`/api/v1/data/feed/${entity}/`, data),
+    updateByData: (
+      entity: string,
+      data: Partial<EntityRecord> & { id: string | number }
+    ) => apiClient.post<EntityRecord>(`/api/v1/data/update/${entity}/`, data),
   },
 
   // Health app endpoints (development only)
   health: {
-    root: () => apiClient.get<HealthRootResponse>('/health/'),
-    check: () => apiClient.get<HealthCheckResponse>('/health/check/'),
-    system: () => apiClient.get<SystemInfoResponse>('/health/system/'),
+    root: () => apiClient.get<HealthRootResponse>("/health/"),
+    check: () => apiClient.get<HealthCheckResponse>("/health/check/"),
+    system: () => apiClient.get<SystemInfoResponse>("/health/system/"),
     test: {
       get: () => {
-        if (process.env.NODE_ENV === 'production' && !process.env.NEXT_PUBLIC_ENABLE_DEBUG) {
+        if (
+          process.env.NODE_ENV === "production" &&
+          !process.env.NEXT_PUBLIC_ENABLE_DEBUG
+        ) {
           return Promise.resolve({
             data: undefined,
-            error: 'Health endpoints are disabled in production',
+            error: "Health endpoints are disabled in production",
             status: 404,
           } as ApiResponse<TestResponse>);
         }
-        return apiClient.get<TestResponse>('/health/test/');
+        return apiClient.get<TestResponse>("/health/test/");
       },
       post: (data: any) => {
-        if (process.env.NODE_ENV === 'production' && !process.env.NEXT_PUBLIC_ENABLE_DEBUG) {
+        if (
+          process.env.NODE_ENV === "production" &&
+          !process.env.NEXT_PUBLIC_ENABLE_DEBUG
+        ) {
           return Promise.resolve({
             data: undefined,
-            error: 'Health endpoints are disabled in production',
+            error: "Health endpoints are disabled in production",
             status: 404,
           } as ApiResponse<TestResponse>);
         }
-        return apiClient.post<TestResponse>('/health/test/', data);
+        return apiClient.post<TestResponse>("/health/test/", data);
       },
     },
   },
@@ -228,109 +376,273 @@ export const api = {
   legacy: {
     healthCheck: () => {
       // Try new endpoint first, fallback to legacy
-      if (process.env.NODE_ENV === 'development') {
-        return apiClient.get<HealthCheckResponse>('/api/health/check/');
+      if (process.env.NODE_ENV === "development") {
+        return apiClient.get<HealthCheckResponse>("/api/health/check/");
       }
       return Promise.resolve({
         data: undefined,
-        error: 'Health endpoints are only available in development',
+        error: "Health endpoints are only available in development",
         status: 404,
       } as ApiResponse<HealthCheckResponse>);
     },
     test: {
       get: () => {
-        if (process.env.NODE_ENV === 'production' && !process.env.NEXT_PUBLIC_ENABLE_DEBUG) {
+        if (
+          process.env.NODE_ENV === "production" &&
+          !process.env.NEXT_PUBLIC_ENABLE_DEBUG
+        ) {
           return Promise.resolve({
             data: undefined,
-            error: 'Test endpoints are disabled in production',
+            error: "Test endpoints are disabled in production",
             status: 404,
           } as ApiResponse<TestResponse>);
         }
-        return apiClient.get<TestResponse>('/test/');
+        return apiClient.get<TestResponse>("/test/");
       },
       post: (data: any) => {
-        if (process.env.NODE_ENV === 'production' && !process.env.NEXT_PUBLIC_ENABLE_DEBUG) {
+        if (
+          process.env.NODE_ENV === "production" &&
+          !process.env.NEXT_PUBLIC_ENABLE_DEBUG
+        ) {
           return Promise.resolve({
             data: undefined,
-            error: 'Test endpoints are disabled in production',
+            error: "Test endpoints are disabled in production",
             status: 404,
           } as ApiResponse<TestResponse>);
         }
-        return apiClient.post<TestResponse>('/test/', data);
+        return apiClient.post<TestResponse>("/test/", data);
       },
     },
   },
 };
 
-
 // Server-side API functions
 export const serverApi = {
   // Navigation endpoints
   navigation: {
-    getNavigation: (cookies?: string) => createServerApiClient(cookies).get<NavigationResponse>('/api/v1/nav_links/'),
+    getNavigation: (cookies?: string) =>
+      createServerApiClient(cookies).get<NavigationResponse>(
+        "/api/v1/nav_links/"
+      ),
   },
 
   // Schema endpoints
   schema: {
-    getSchemaNames: (cookies?: string) => createServerApiClient(cookies).get<string[]>('/api/v1/schema/names/'),
-    getFullSchema: (cookies?: string) => createServerApiClient(cookies).get<FullSchemaResponse>('/api/v1/schema/full/'),
-    getEntitySchema: (entity: string, cookies?: string) => createServerApiClient(cookies).get<EntitySchema>(`/api/v1/schema/entity/${entity}/`),
-    getEntityFieldNames: (entity: string, cookies?: string) => createServerApiClient(cookies).get<string[]>(`/api/v1/schema/entity/${entity}/names/`),
-    getFieldDetails: (entity: string, field: string, cookies?: string) => createServerApiClient(cookies).get<FieldSchema>(`/api/v1/schema/field/${entity}/${field}/`),
-    getCategories: (cookies?: string) => createServerApiClient(cookies).get<string[]>('/api/v1/schema/categories/'),
-    getTags: (cookies?: string) => createServerApiClient(cookies).get<string[]>('/api/v1/schema/tags/'),
+    getSchemaNames: (cookies?: string) =>
+      createServerApiClient(cookies).get<string[]>("/api/v1/schema/names/"),
+    getFullSchema: (cookies?: string) =>
+      createServerApiClient(cookies).get<FullSchemaResponse>(
+        "/api/v1/schema/full/"
+      ),
+    getEntitySchema: (
+      entity: string,
+      cookies?: string,
+      flattenDict = false
+    ) => {
+      const params = flattenDict ? "?flatten_dict=true" : "";
+      return createServerApiClient(cookies).get<EntitySchema>(
+        `/api/v1/schema/entity/${entity}/${params}`
+      );
+    },
+    getEntityFieldNames: (entity: string, cookies?: string) =>
+      createServerApiClient(cookies).get<string[]>(
+        `/api/v1/schema/entity/${entity}/names/`
+      ),
+    getFieldDetails: (entity: string, field: string, cookies?: string) =>
+      createServerApiClient(cookies).get<FieldSchema>(
+        `/api/v1/schema/field/${entity}/${field}/`
+      ),
+    getCategories: (cookies?: string) =>
+      createServerApiClient(cookies).get<string[]>(
+        "/api/v1/schema/categories/"
+      ),
+    getTags: (cookies?: string) =>
+      createServerApiClient(cookies).get<string[]>("/api/v1/schema/tags/"),
+  },
+
+  // Form endpoints
+  form: {
+    getFormSchema: (entity: string, cookies?: string) =>
+      createServerApiClient(cookies).get<any>(`/api/v1/form/schema/${entity}/`),
+    getFieldOptions: (entity: string, fieldName: string, cookies?: string) =>
+      createServerApiClient(cookies).get<any>(
+        `/api/v1/form/options/${entity}/${fieldName}/`
+      ),
   },
 
   // Data endpoints
   data: {
-    getEntityData: (entity: string, params?: { skip?: number; limit?: number; search?: string; filters?: string }, cookies?: string) => {
+    getEntityData: (
+      entity: string,
+      params?: {
+        skip?: number;
+        limit?: number;
+        search?: string;
+        filters?: string;
+        flattenDict?: boolean;
+      },
+      cookies?: string
+    ) => {
       const searchParams = new URLSearchParams();
-      if (params?.skip !== undefined) searchParams.set('skip', params.skip.toString());
-      if (params?.limit !== undefined) searchParams.set('limit', params.limit.toString());
-      if (params?.search) searchParams.set('search', params.search);
-      if (params?.filters) searchParams.set('filters', params.filters);
+      if (params?.skip !== undefined)
+        searchParams.set("skip", params.skip.toString());
+      if (params?.limit !== undefined)
+        searchParams.set("limit", params.limit.toString());
+      if (params?.search) searchParams.set("search", params.search);
+      if (params?.filters) searchParams.set("filters", params.filters);
+      if (params?.flattenDict) searchParams.set("flatten_dict", "true");
 
       const queryString = searchParams.toString();
-      const endpoint = `/api/v1/data/entity/${entity}/${queryString ? `?${queryString}` : ''}`;
+      const endpoint = `/api/v1/data/entity/${entity}/${
+        queryString ? `?${queryString}` : ""
+      }`;
       return createServerApiClient(cookies).get<EntityRecord[]>(endpoint);
     },
-    getRecord: (entity: string, id: string | number, cookies?: string) => createServerApiClient(cookies).get<EntityRecord>(`/api/v1/data/record/${entity}/${id}/`),
-    getRecordDetail: (entity: string, id: string | number, cookies?: string) => createServerApiClient(cookies).get<EntityRecord>(`/api/v1/data/record/${entity}/${id}/`),
-    createRecord: (entity: string, data: Partial<EntityRecord>, cookies?: string) => createServerApiClient(cookies).post<EntityRecord>(`/api/v1/data/record/${entity}/`, data),
-    updateRecord: (entity: string, id: string | number, data: Partial<EntityRecord>, cookies?: string) => createServerApiClient(cookies).put<EntityRecord>(`/api/v1/data/record/${entity}/${id}/`, data),
-    patchRecord: (entity: string, id: string | number, data: Partial<EntityRecord>, cookies?: string) => createServerApiClient(cookies).patch<EntityRecord>(`/api/v1/data/record/${entity}/${id}/`, data),
-    deleteRecord: (entity: string, id: string | number, cookies?: string) => createServerApiClient(cookies).delete<{ success: boolean }>(`/api/v1/data/${entity}/${id}/`),
-    getCount: (entity: string, cookies?: string) => createServerApiClient(cookies).get<DataCountResponse>(`/api/v1/data/count/${entity}/`),
-    createNew: (entity: string, data: Partial<EntityRecord>, cookies?: string) => createServerApiClient(cookies).post<EntityRecord>(`/api/v1/data/new/${entity}/`, data),
-    upsertRecord: (entity: string, data: Partial<EntityRecord>, cookies?: string) => createServerApiClient(cookies).post<EntityRecord>(`/api/v1/data/feed/${entity}/`, data),
-    updateByData: (entity: string, data: Partial<EntityRecord> & { id: string | number }, cookies?: string) => createServerApiClient(cookies).post<EntityRecord>(`/api/v1/data/update/${entity}/`, data),
+    getEntityOptions: (
+      entity: string,
+      params?: { limit?: number; search?: string },
+      cookies?: string
+    ) => {
+      const searchParams = new URLSearchParams();
+      if (params?.limit !== undefined)
+        searchParams.set("limit", params.limit.toString());
+      if (params?.search) searchParams.set("search", params.search);
+
+      const queryString = searchParams.toString();
+      const endpoint = `/api/v1/data/options/${entity}/${
+        queryString ? `?${queryString}` : ""
+      }`;
+      return createServerApiClient(cookies).get<
+        Array<{ id: string | number; repr: string }>
+      >(endpoint);
+    },
+    getRecord: (
+      entity: string,
+      id: string | number,
+      cookies?: string,
+      flattenDict = false
+    ) => {
+      const params = flattenDict ? "?flatten_dict=true" : "";
+      return createServerApiClient(cookies).get<EntityRecord>(
+        `/api/v1/data/record/${entity}/${id}/${params}`
+      );
+    },
+    getRecordDetail: (
+      entity: string,
+      id: string | number,
+      cookies?: string,
+      flattenDict = false
+    ) => {
+      const params = flattenDict ? "?flatten_dict=true" : "";
+      return createServerApiClient(cookies).get<EntityRecord>(
+        `/api/v1/data/record/${entity}/${id}/${params}`
+      );
+    },
+    createRecord: (
+      entity: string,
+      data: Partial<EntityRecord>,
+      cookies?: string
+    ) =>
+      createServerApiClient(cookies).post<EntityRecord>(
+        `/api/v1/data/record/${entity}/`,
+        data
+      ),
+    updateRecord: (
+      entity: string,
+      id: string | number,
+      data: Partial<EntityRecord>,
+      cookies?: string
+    ) =>
+      createServerApiClient(cookies).put<EntityRecord>(
+        `/api/v1/data/record/${entity}/${id}/`,
+        data
+      ),
+    patchRecord: (
+      entity: string,
+      id: string | number,
+      data: Partial<EntityRecord>,
+      cookies?: string
+    ) =>
+      createServerApiClient(cookies).patch<EntityRecord>(
+        `/api/v1/data/record/${entity}/${id}/`,
+        data
+      ),
+    deleteRecord: (entity: string, id: string | number, cookies?: string) =>
+      createServerApiClient(cookies).delete<{ success: boolean }>(
+        `/api/v1/data/${entity}/${id}/`
+      ),
+    getCount: (entity: string, cookies?: string) =>
+      createServerApiClient(cookies).get<DataCountResponse>(
+        `/api/v1/data/count/${entity}/`
+      ),
+    createNew: (
+      entity: string,
+      data: Partial<EntityRecord>,
+      cookies?: string
+    ) =>
+      createServerApiClient(cookies).post<EntityRecord>(
+        `/api/v1/data/new/${entity}/`,
+        data
+      ),
+    upsertRecord: (
+      entity: string,
+      data: Partial<EntityRecord>,
+      cookies?: string
+    ) =>
+      createServerApiClient(cookies).post<EntityRecord>(
+        `/api/v1/data/feed/${entity}/`,
+        data
+      ),
+    updateByData: (
+      entity: string,
+      data: Partial<EntityRecord> & { id: string | number },
+      cookies?: string
+    ) =>
+      createServerApiClient(cookies).post<EntityRecord>(
+        `/api/v1/data/update/${entity}/`,
+        data
+      ),
   },
 
   // Health app endpoints
   health: {
-    root: (cookies?: string) => createServerApiClient(cookies).get<HealthRootResponse>('/health/'),
-    check: (cookies?: string) => createServerApiClient(cookies).get<HealthCheckResponse>('/health/check/'),
-    system: (cookies?: string) => createServerApiClient(cookies).get<SystemInfoResponse>('/health/system/'),
+    root: (cookies?: string) =>
+      createServerApiClient(cookies).get<HealthRootResponse>("/health/"),
+    check: (cookies?: string) =>
+      createServerApiClient(cookies).get<HealthCheckResponse>("/health/check/"),
+    system: (cookies?: string) =>
+      createServerApiClient(cookies).get<SystemInfoResponse>("/health/system/"),
     test: {
       get: (cookies?: string) => {
-        if (process.env.NODE_ENV === 'production' && !process.env.ENABLE_TEST_ENDPOINTS) {
+        if (
+          process.env.NODE_ENV === "production" &&
+          !process.env.ENABLE_TEST_ENDPOINTS
+        ) {
           return Promise.resolve({
             data: undefined,
-            error: 'Health endpoints are disabled in production',
+            error: "Health endpoints are disabled in production",
             status: 404,
           } as ApiResponse<TestResponse>);
         }
-        return createServerApiClient(cookies).get<TestResponse>('/health/test/');
+        return createServerApiClient(cookies).get<TestResponse>(
+          "/health/test/"
+        );
       },
       post: (data: any, cookies?: string) => {
-        if (process.env.NODE_ENV === 'production' && !process.env.ENABLE_TEST_ENDPOINTS) {
+        if (
+          process.env.NODE_ENV === "production" &&
+          !process.env.ENABLE_TEST_ENDPOINTS
+        ) {
           return Promise.resolve({
             data: undefined,
-            error: 'Health endpoints are disabled in production',
+            error: "Health endpoints are disabled in production",
             status: 404,
           } as ApiResponse<TestResponse>);
         }
-        return createServerApiClient(cookies).post<TestResponse>('/health/test/', data);
+        return createServerApiClient(cookies).post<TestResponse>(
+          "/health/test/",
+          data
+        );
       },
     },
   },

@@ -1,4 +1,4 @@
-import { FieldSchema, ColumnTypeInfo, ColumnVariant } from '@/app/types/Data';
+import { FieldSchema, ColumnTypeInfo, ColumnVariant, EntitySchema } from '@/app/types/Data';
 
 /**
  * Parse Python type annotation to determine column type information
@@ -32,7 +32,6 @@ export function parseFieldAnnotation(field: FieldSchema): ColumnTypeInfo {
 
   if (setMatch || listMatch) {
     const innerType = setMatch?.[1] || listMatch?.[1] || '';
-    const isArray = true;
 
     // Check if it's a relation
     const entityMatch = innerType.match(/Entity\((.+)\)/);
@@ -108,6 +107,10 @@ function parseBasicType(typeStr: string): { variant: ColumnVariant; baseType: st
     return { variant: 'date', baseType: 'date' };
   }
 
+  if (lowerType.includes('dict') || lowerType.includes('jsonfield')) {
+    return { variant: 'text', baseType: 'dict' };
+  }
+
   // Default fallback
   return { variant: 'text', baseType: 'string' };
 }
@@ -130,22 +133,80 @@ export function getFieldDisplayName(field: FieldSchema): string {
 /**
  * Format field value based on its type
  */
+/**
+ * Check if a field can be used for bulk updates (not unique, not indexed, not read-only)
+ */
+export function isBulkUpdatable(field: FieldSchema): boolean {
+  // Skip read-only fields
+  if (field.name === 'id' || field.name === 'pretty_id') {
+    return false;
+  }
+
+  // Skip reverse relation fields
+  if (field.is_linked_by_related_name) {
+    return false;
+  }
+
+  // Skip unique or indexed fields to avoid constraint violations
+  if (field.unique || field.indexed) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Get fields that are safe for bulk updates from a schema
+ */
+export function getBulkUpdatableFields(schema: EntitySchema): FieldSchema[] {
+  if (!schema || !schema.fields) {
+    return [];
+  }
+
+  return Object.values(schema.fields).filter(isBulkUpdatable);
+}
+
 export function formatFieldValue(value: any, typeInfo: ColumnTypeInfo): string {
   if (value === null || value === undefined) {
     return '—';
   }
 
-  if (typeInfo.isArray && Array.isArray(value)) {
+  // Handle arrays - either actual arrays or stringified JSON arrays
+  if (typeInfo.isArray) {
+    let arrayValue: any[] = [];
+
+    if (Array.isArray(value)) {
+      arrayValue = value;
+    } else if (typeof value === 'string') {
+      // Try to parse stringified JSON array
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) {
+          arrayValue = parsed;
+        } else {
+          // If it's not an array after parsing, treat as single item
+          arrayValue = [parsed];
+        }
+      } catch {
+        // If parsing fails, treat the string as a single item
+        arrayValue = [value];
+      }
+    } else {
+      // For other types, treat as single item
+      arrayValue = [value];
+    }
+
     if (typeInfo.isRelation) {
       // For relation arrays (many-to-many), look for repr field first, then fallback to other identifiers
-      return value.map(item => {
+      return arrayValue.map(item => {
         if (typeof item === 'object' && item !== null) {
           return item.repr || item.name || item.title || item.id || String(item);
         }
         return String(item);
       }).join(', ');
     } else {
-      return value.map(item => String(item)).join(', ');
+      // For regular arrays (like tags), just join the string values
+      return arrayValue.map(item => String(item)).join(', ');
     }
   }
 
@@ -163,7 +224,19 @@ export function formatFieldValue(value: any, typeInfo: ColumnTypeInfo): string {
 
     case 'date':
       try {
-        return new Date(value).toLocaleDateString();
+        const date = new Date(value);
+        // Check if the original value includes time information
+        if (typeof value === 'string' && (value.includes('T') || value.includes(' ') && value.includes(':'))) {
+          // This is a datetime, format with both date and time
+          return date.toLocaleDateString() + ' at ' + date.toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+          });
+        } else {
+          // This is a date-only, format just the date
+          return date.toLocaleDateString();
+        }
       } catch {
         return String(value);
       }

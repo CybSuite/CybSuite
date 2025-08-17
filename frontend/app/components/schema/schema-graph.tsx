@@ -130,11 +130,6 @@ export function SchemaGraph({ entities }: SchemaGraphProps) {
                 field => field.referenced_entity
             );
 
-            // Get referenced fields that point to visible entities (for edge creation)
-            const visibleReferencedFields = Object.values(entity.fields).filter(
-                field => field.referenced_entity && entityMap.has(field.referenced_entity)
-            );
-
             // Check if this entity is referenced by any other entity
             const isReferencedByOthers = entities.some(otherEntity =>
                 Object.values(otherEntity.fields).some(field =>

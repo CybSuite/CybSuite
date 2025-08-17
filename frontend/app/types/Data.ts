@@ -58,6 +58,7 @@ export type ColumnVariant =
   | "number"
   | "select"
   | "date"
+  | "datetime"
   | "boolean"
   | "multiSelect";
 
