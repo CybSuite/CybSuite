@@ -2,8 +2,9 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ColumnDef, SortingFn } from "@tanstack/react-table";
+import { ColumnDef, SortingFn, SortingState, OnChangeFn } from "@tanstack/react-table";
 import CybsuiteTable from "@/app/components/data/CybsuiteTable";
+import CybsuiteTableServer from "@/app/components/data/CybsuiteTableServer";
 import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header";
 import { RelationLink } from "@/app/components/data/RelationLink";
 import { EntityFormDialog } from "@/app/components/data/form/EntityFormDialog";
@@ -148,11 +149,13 @@ interface ModelDataTableProps {
 	initialSchema?: EntitySchema;
 	initialFormSchema?: any; // Form schema from server
 	initialFieldOptions?: Record<string, any[]>; // Preloaded field options
+	initialPagination?: any; // Initial pagination data from server
 	isStaticData?: boolean; // If true, do not fetch data from API, just use initialData
 	flattenDictColumn?: boolean; // If true, flatten dict fields into columns
 	showSeeAllButton?: boolean;
 	showRefreshButton?: boolean;
 	showAddButton?: boolean;
+	isServerManaged?: boolean; // If true, use server-side table management
 }
 
 export default function ModelDataTable({
@@ -161,11 +164,13 @@ export default function ModelDataTable({
 	initialSchema,
 	initialFormSchema,
 	initialFieldOptions = {},
+	initialPagination,
 	isStaticData = false,
 	flattenDictColumn = false,
 	showSeeAllButton = false,
 	showRefreshButton = true,
 	showAddButton = false,
+	isServerManaged = false,
 }: ModelDataTableProps) {
 	const router = useRouter();
 	const [data, setData] = React.useState<EntityRecord[]>(initialData);
@@ -176,10 +181,38 @@ export default function ModelDataTable({
 	const [loading, setLoading] = React.useState(!initialData.length);
 	const [error, setError] = React.useState<string | null>(null);
 	const [tableKey, setTableKey] = React.useState(`${model}-table-initial`);
-	const [pagination, _] = React.useState({
+	const [pagination, setPagination] = React.useState({
 		pageIndex: 0,
 		pageSize: 10,
 	});
+
+	// Server-side state
+	const [totalCount, setTotalCount] = React.useState(
+		initialPagination?.total || 0
+	);
+	const [filteredCount, setFilteredCount] = React.useState<number | undefined>(
+		initialPagination?.filtered
+	);
+	const [currentSort, setCurrentSort] = React.useState<SortingState>([]);
+	const [currentSearch, setCurrentSearch] = React.useState("");
+	const [currentFilters, setCurrentFilters] = React.useState<any>({});
+
+	// Memoize data to prevent unnecessary re-renders
+	const memoizedData = React.useMemo(() => data, [data]);
+
+	// Memoize table props object to prevent unnecessary re-renders
+	const tableProps = React.useMemo(() => ({
+		enableSorting: true,
+		enableFiltering: true,
+		enablePagination: true,
+		enableRowSelection: true,
+		enableGlobalSearch: true,
+	}), []);
+
+	const memoizedTableId = React.useMemo(() => `${model}-table`, [model]);
+
+	// State for manual refreshes only
+	const [refreshTrigger, setRefreshTrigger] = React.useState(0);
 
 	// Edit state for the edit dialog
 	const [editRecord, setEditRecord] = React.useState<EntityRecord | null>(null);
@@ -261,29 +294,74 @@ export default function ModelDataTable({
 		}
 	}, [relationOptions]); // Add relationOptions as dependency to check existing options
 
-	// Fetch data from API
-	const fetchData = React.useCallback(async (pageIndex = 0, pageSize = 10) => {
+	// Fetch data from API - simplified stable version
+	const fetchData = React.useCallback(async (pageIndex = 0, pageSize = 10, serverParams?: {
+		search?: string;
+		filters?: any;
+		sort?: SortingState;
+	}) => {
 		try {
 			setLoading(true);
 			setError(null);
 
-			const response = await api.data.getEntityData(model, {
-				skip: pageIndex * pageSize,
-				limit: pageSize,
-				flattenDict: flattenDictColumn,
-			});
+			if (isServerManaged) {
+				// Server-side mode - pass server-side parameters
+				const response = await api.data.getEntityData(model, {
+					skip: pageIndex * pageSize,
+					limit: pageSize,
+					flattenDict: flattenDictColumn,
+					serverSearch: serverParams?.search,
+					serverFilters: serverParams?.filters ? JSON.stringify(serverParams.filters) : undefined,
+					sortBy: serverParams?.sort && serverParams.sort.length > 0 ? serverParams.sort[0].id : undefined,
+					sortDesc: serverParams?.sort && serverParams.sort.length > 0 ? serverParams.sort[0].desc : false,
+				});
 
-			if (response.error) {
-				throw new Error(`Data error: ${response.error}`);
+				if (response.error) {
+					throw new Error(`Data error: ${response.error}`);
+				}
+
+				// Handle both old and new response formats
+				if (Array.isArray(response.data)) {
+					setData(response.data || []);
+				} else if (response.data && 'data' in response.data) {
+					setData(response.data.data || []);
+					if (response.data.pagination) {
+						setTotalCount(response.data.pagination.total || 0);
+						setFilteredCount(response.data.pagination.filtered || 0);
+					}
+				} else {
+					setData([]);
+				}
+			} else {
+				// Client-side mode
+				const response = await api.data.getEntityData(model, {
+					skip: pageIndex * pageSize,
+					limit: pageSize,
+					flattenDict: flattenDictColumn,
+				});
+
+				if (response.error) {
+					throw new Error(`Data error: ${response.error}`);
+				}
+
+				if (Array.isArray(response.data)) {
+					setData(response.data || []);
+				} else if (response.data && 'data' in response.data) {
+					setData(response.data.data || []);
+				} else {
+					setData([]);
+				}
 			}
-
-			setData(response.data || []);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Failed to fetch data');
 		} finally {
 			setLoading(false);
 		}
-	}, [model, flattenDictColumn]);
+	}, [model, flattenDictColumn, isServerManaged]); // Include isServerManaged but make it stable
+
+	// Create ref for fetchData to avoid dependency issues
+	const fetchDataRef = React.useRef(fetchData);
+	fetchDataRef.current = fetchData;
 
 	// Generate columns based on schema and fields
 	const generateColumns = React.useCallback((): ColumnDef<EntityRecord>[] => {
@@ -410,17 +488,20 @@ export default function ModelDataTable({
 		});
 	}, [schema, relationOptions, flattenDictColumn]);
 
-	// Update columns when schema or relation options change - force immediate update
+	// Update columns when schema or relation options change
 	React.useEffect(() => {
 		if (schema && schema.fields) {
 			const newColumns = generateColumns();
 			setColumns(newColumns);
 
-			// Force table re-render by updating the key
-			const newTableKey = `${model}-table-${Date.now()}-${Object.keys(relationOptions).length}`;
-			setTableKey(newTableKey);
+			// Only force table re-render for client-side tables by updating the key
+			// Server-managed tables maintain their own state and don't need remounting
+			if (!isServerManaged) {
+				const newTableKey = `${model}-table-${Date.now()}-${Object.keys(relationOptions).length}`;
+				setTableKey(newTableKey);
+			}
 		}
-	}, [schema, relationOptions, generateColumns, model]);
+	}, [schema, relationOptions, generateColumns, model, isServerManaged]);
 
 	// Initialize columns immediately if we have initial schema
 	React.useEffect(() => {
@@ -431,18 +512,37 @@ export default function ModelDataTable({
 		}
 	}, [initialSchema]); // Remove columns.length dependency to avoid infinite loop
 
-	// Initial data fetch
+	// Initial data fetch - only run once during initialization
 	React.useEffect(() => {
 		const init = async () => {
 			await fetchSchema();
 			if (initialData.length === 0 && !isStaticData) {
-				await fetchData(pagination.pageIndex, pagination.pageSize);
+				if (isServerManaged) {
+					// For server-managed tables, do initial fetch only
+					await fetchDataRef.current(pagination.pageIndex, pagination.pageSize, {
+						search: currentSearch,
+						filters: currentFilters,
+						sort: currentSort,
+					});
+				} else {
+					await fetchDataRef.current(pagination.pageIndex, pagination.pageSize);
+				}
 			} else {
 				setLoading(false);
 			}
 		};
 		init();
-	}, [fetchSchema, fetchData, pagination.pageIndex, pagination.pageSize, initialData.length]);
+	}, []); // Empty dependency array - run only once
+
+	// Reset pagination when filtered count changes and current page is beyond available data
+	React.useEffect(() => {
+		if (isServerManaged && filteredCount != null && pagination.pageSize > 0) {
+			const maxPage = Math.max(0, Math.ceil(filteredCount / pagination.pageSize) - 1);
+			if (pagination.pageIndex > maxPage && maxPage >= 0) {
+				setPagination(prev => ({ ...prev, pageIndex: 0 }));
+			}
+		}
+	}, [isServerManaged, filteredCount, pagination.pageSize, pagination.pageIndex]);
 
 	// Fetch relation options when schema changes
 	React.useEffect(() => {
@@ -511,18 +611,87 @@ export default function ModelDataTable({
 				// Implement export functionality
 				break;
 		}
-	}, [model, router, fetchData, pagination.pageIndex, pagination.pageSize]);
+	}, [model, router]);
 
 	// Handle bulk update success
 	const handleBulkUpdateSuccess = React.useCallback((updatedCount: number) => {
-		// Refresh data after successful bulk update
-		fetchData(pagination.pageIndex, pagination.pageSize);
+		// Trigger refresh after successful bulk update
+		setRefreshTrigger(prev => prev + 1);
 		// Clear row selection after successful update
 		setRowSelection({});
 		// Close dialog and reset state
 		setBulkUpdateDialogOpen(false);
 		setSelectedRecordsForBulkUpdate([]);
-	}, [fetchData, pagination.pageIndex, pagination.pageSize]);
+	}, []);
+
+	// Server-side table handlers - fetch data directly when called
+	const handlePageChange = React.useCallback((pageIndex: number, pageSize: number) => {
+		setPagination({ pageIndex, pageSize });
+		// Directly fetch data for server-managed tables
+		if (isServerManaged) {
+			fetchDataRef.current(pageIndex, pageSize, {
+				search: currentSearch,
+				filters: currentFilters,
+				sort: currentSort,
+			});
+		}
+	}, [isServerManaged, currentSearch, currentFilters, currentSort]);
+
+	const handleSortChange: OnChangeFn<SortingState> = React.useCallback((updaterOrValue) => {
+		const newSort = typeof updaterOrValue === 'function' ? updaterOrValue(currentSort) : updaterOrValue;
+		setCurrentSort(newSort);
+		// Directly fetch data for server-managed tables
+		if (isServerManaged) {
+			fetchDataRef.current(pagination.pageIndex, pagination.pageSize, {
+				search: currentSearch,
+				filters: currentFilters,
+				sort: newSort,
+			});
+		}
+	}, [currentSort, isServerManaged, pagination.pageIndex, pagination.pageSize, currentSearch, currentFilters]);
+
+	const handleFilterChange = React.useCallback((filters: any) => {
+		setCurrentFilters(filters);
+		// Reset to first page when filters change
+		setPagination(prev => ({ ...prev, pageIndex: 0 }));
+		// Directly fetch data for server-managed tables
+		if (isServerManaged) {
+			fetchDataRef.current(0, pagination.pageSize, {
+				search: currentSearch,
+				filters: filters,
+				sort: currentSort,
+			});
+		}
+	}, [isServerManaged, pagination.pageSize, currentSearch, currentSort]);
+
+	const handleSearchChange = React.useCallback((search: string) => {
+		setCurrentSearch(search);
+		// Reset to first page when search changes
+		setPagination(prev => ({ ...prev, pageIndex: 0 }));
+		// Directly fetch data for server-managed tables
+		if (isServerManaged) {
+			fetchDataRef.current(0, pagination.pageSize, {
+				search: search,
+				filters: currentFilters,
+				sort: currentSort,
+			});
+		}
+	}, [isServerManaged, pagination.pageSize, currentFilters, currentSort]);
+
+	// Handle manual refreshes via refreshTrigger only
+	React.useEffect(() => {
+		if (refreshTrigger > 0) {
+			if (isServerManaged) {
+				fetchDataRef.current(pagination.pageIndex, pagination.pageSize, {
+					search: currentSearch,
+					filters: currentFilters,
+					sort: currentSort,
+				});
+			} else {
+				fetchDataRef.current(pagination.pageIndex, pagination.pageSize);
+			}
+		}
+	}, [refreshTrigger]);
 
 	// Handle actual deletion after confirmation
 	const handleConfirmDelete = React.useCallback(async () => {
@@ -551,8 +720,8 @@ export default function ModelDataTable({
 				// You might want to show a toast notification here
 			}
 
-			// Refresh data after deletion
-			await fetchData(pagination.pageIndex, pagination.pageSize);
+			// Refresh data after deletion by triggering a refresh
+			setRefreshTrigger(prev => prev + 1);
 			// Clear row selection after successful deletion
 			setRowSelection({});
 			// Close dialog and reset state
@@ -563,7 +732,7 @@ export default function ModelDataTable({
 		} finally {
 			setIsDeleting(false);
 		}
-	}, [recordsToDelete, model, fetchData, pagination.pageIndex, pagination.pageSize]);
+	}, [recordsToDelete, model]);
 
 	// Handle cancel deletion
 	const handleCancelDelete = React.useCallback(() => {
@@ -574,8 +743,8 @@ export default function ModelDataTable({
 	// Retry function
 	const retry = React.useCallback(() => {
 		fetchSchema();
-		fetchData(pagination.pageIndex, pagination.pageSize);
-	}, [fetchSchema, fetchData, pagination.pageIndex, pagination.pageSize]);
+		setRefreshTrigger(prev => prev + 1);
+	}, [fetchSchema]);
 
 	if (error) {
 		return (
@@ -594,7 +763,8 @@ export default function ModelDataTable({
 		);
 	}
 
-	if (loading && data.length === 0) {
+	if (loading && data.length === 0 && columns.length === 0) {
+		// Only show skeleton loading when we don't have columns yet (initial schema loading)
 		return (
 			<div className="space-y-4">
 				<div className="flex items-center justify-between">
@@ -652,23 +822,95 @@ export default function ModelDataTable({
 			</div>
 
 			{columns.length > 0 ? (
-				<CybsuiteTable
-					key={tableKey}
-					data={data}
-					columns={columns}
-					pageSize={pagination.pageSize}
-					enableSorting={true}
-					enableFiltering={true}
-					enablePagination={true}
-					enableRowSelection={true}
-					enableGlobalSearch={true}
-					onRowAction={handleRowAction}
-					tableId={`${model}-table`}
-					initialColumnVisibility={columnVisibility}
-					rowSelection={rowSelection}
-					onRowSelectionChange={setRowSelection}
-				/>
+				isServerManaged ? (
+					<CybsuiteTableServer
+						key={tableKey}
+						data={memoizedData}
+						columns={columns as any}
+						loading={loading}
+						pageSize={pagination.pageSize}
+						currentPage={pagination.pageIndex}
+						totalCount={totalCount}
+						filteredCount={filteredCount}
+						{...tableProps}
+						onRowAction={handleRowAction}
+						tableId={memoizedTableId}
+						initialColumnVisibility={columnVisibility}
+						rowSelection={rowSelection}
+						onRowSelectionChange={setRowSelection}
+						onPageChange={handlePageChange}
+						onSortChange={handleSortChange}
+						onFilterChange={handleFilterChange}
+						onSearchChange={handleSearchChange}
+						currentSort={currentSort}
+						currentFilters={currentFilters}
+						currentSearch={currentSearch}
+					/>
+				) : (
+					<CybsuiteTable
+						key={tableKey}
+						data={data}
+						columns={columns}
+						pageSize={pagination.pageSize}
+						enableSorting={true}
+						enableFiltering={true}
+						enablePagination={true}
+						enableRowSelection={true}
+						enableGlobalSearch={true}
+						onRowAction={handleRowAction}
+						tableId={`${model}-table`}
+						initialColumnVisibility={columnVisibility}
+						rowSelection={rowSelection}
+						onRowSelectionChange={setRowSelection}
+					/>
+				)
+			) : (schema || initialSchema) ? (
+				// If we have schema but no columns, it means columns are being generated
+				// Show the table container to maintain component structure
+				isServerManaged ? (
+					<CybsuiteTableServer
+						key={tableKey}
+						data={[]}
+						columns={[]}
+						loading={true}
+						pageSize={pagination.pageSize}
+						currentPage={pagination.pageIndex}
+						totalCount={totalCount}
+						filteredCount={filteredCount}
+						{...tableProps}
+						onRowAction={handleRowAction}
+						tableId={memoizedTableId}
+						initialColumnVisibility={{}}
+						rowSelection={rowSelection}
+						onRowSelectionChange={setRowSelection}
+						onPageChange={handlePageChange}
+						onSortChange={handleSortChange}
+						onFilterChange={handleFilterChange}
+						onSearchChange={handleSearchChange}
+						currentSort={currentSort}
+						currentFilters={currentFilters}
+						currentSearch={currentSearch}
+					/>
+				) : (
+					<CybsuiteTable
+						key={tableKey}
+						data={[]}
+						columns={[]}
+						pageSize={pagination.pageSize}
+						enableSorting={true}
+						enableFiltering={true}
+						enablePagination={true}
+						enableRowSelection={true}
+						enableGlobalSearch={true}
+						onRowAction={handleRowAction}
+						tableId={`${model}-table`}
+						initialColumnVisibility={{}}
+						rowSelection={rowSelection}
+						onRowSelectionChange={setRowSelection}
+					/>
+				)
 			) : (
+				// Only show skeleton when we don't have schema yet (initial loading)
 				<div className="space-y-4">
 					<div className="flex items-center justify-between">
 						<div className="space-y-2">

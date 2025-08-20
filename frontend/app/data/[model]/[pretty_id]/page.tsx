@@ -3,8 +3,6 @@ import { notFound } from 'next/navigation';
 import { serverApi } from '@/app/lib/api';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { parseFieldAnnotation } from '@/app/lib/schema-utils';
-import { EntitySchema } from '@/app/types/Data';
 import DetailPageView from '@/app/components/data/DetailPageView';
 
 interface PageProps {
@@ -57,10 +55,11 @@ function DetailPageSkeleton() {
 // Server component that fetches data and passes to client
 async function DetailPageContent({ model, pretty_id }: { model: string; pretty_id: string }) {
 	try {
-		// Fetch both schema and record data
-		const [schemaResponse, recordResponse] = await Promise.all([
+		// Fetch schema, record data, and related data
+		const [schemaResponse, recordResponse, relatedResponse] = await Promise.all([
 			serverApi.schema.getEntitySchema(model),
-			serverApi.data.getRecordDetail(model, pretty_id)
+			serverApi.data.getRecordDetail(model, pretty_id),
+			serverApi.data.getRelatedRecords(model, pretty_id)
 		]);
 
 		if (schemaResponse.error) {
@@ -73,96 +72,14 @@ async function DetailPageContent({ model, pretty_id }: { model: string; pretty_i
 			notFound();
 		}
 
-		const schema = schemaResponse.data!;
-		const record = recordResponse.data!;
-
-		// Fetch related data for tables
-		const relatedEntities = new Set<string>();
-
-		// Find all relation fields
-		Object.values(schema.fields).forEach(field => {
-			const typeInfo = parseFieldAnnotation(field);
-			if (typeInfo.isRelation && typeInfo.referencedEntity) {
-				relatedEntities.add(typeInfo.referencedEntity);
-			}
-		});
-
-		// Load data and schemas for each related entity
-		const relatedDataPromises: Record<string, Promise<any>> = {};
-		const relatedSchemaPromises: Record<string, Promise<any>> = {};
-
-		for (const entityType of relatedEntities) {
-			relatedSchemaPromises[entityType] = serverApi.schema.getEntitySchema(entityType);
-			relatedDataPromises[entityType] = serverApi.data.getEntityData(entityType);
+		if (relatedResponse.error) {
+			console.error('Related records error:', relatedResponse.error);
+			notFound();
 		}
 
-		// Wait for all related data to load
-		const [relatedSchemasResults, relatedDataResults] = await Promise.all([
-			Promise.allSettled(Object.entries(relatedSchemaPromises).map(async ([entityType, promise]) => ({
-				entityType,
-				result: await promise
-			}))),
-			Promise.allSettled(Object.entries(relatedDataPromises).map(async ([entityType, promise]) => ({
-				entityType,
-				result: await promise
-			})))
-		]);
-
-		// Process results
-		const relatedSchemas: Record<string, EntitySchema> = {};
-		const relatedData: Record<string, any[]> = {};
-
-		// Process schema results
-		relatedSchemasResults.forEach((result, index) => {
-			if (result.status === 'fulfilled' && result.value.result.data) {
-				const filteredFields = Object.fromEntries(
-					Object.entries(result.value.result.data.fields).filter(
-						([, value]: any[]) => value.referenced_entity !== model
-					)
-				);
-
-				const newData = {
-					...result.value.result.data,
-					fields: filteredFields,
-				};
-
-				relatedSchemas[result.value.entityType] = newData;
-			}
-		});
-
-		// Process data results and filter for related records
-		relatedDataResults.forEach((result, index) => {
-			if (result.status === 'fulfilled' && result.value.result.data) {
-				const entityType = result.value.entityType;
-				const allRecords = result.value.result.data;
-
-				// Filter records that are related to current record
-				const filteredRecords = allRecords.filter((relatedRecord: any) => {
-					return Object.values(schema.fields).some(field => {
-						const typeInfo = parseFieldAnnotation(field);
-						const fieldValue = record[field.name];
-						if (typeInfo.isRelation && typeInfo.referencedEntity === entityType && fieldValue) {
-							if (Array.isArray(fieldValue)) {
-								return fieldValue.some(item =>
-									(typeof item === 'object' && item.id === relatedRecord.id) ||
-									String(item) === String(relatedRecord.id)
-								);
-							} else if (typeof fieldValue === 'object' && fieldValue.id) {
-								return fieldValue.id === relatedRecord.id;
-							}
-						}
-						return false;
-					});
-				});
-				relatedData[entityType] = filteredRecords;
-			} else {
-				// Ensure the entity has an empty array even if no data
-				const entityType = result.status === 'fulfilled' ? result.value.entityType : '';
-				if (entityType) {
-					relatedData[entityType] = [];
-				}
-			}
-		});
+		const schema = schemaResponse.data!;
+		const record = recordResponse.data!;
+		const { relatedData, relatedSchemas } = relatedResponse.data!;
 
 		// Pass the data to the client component
 		return (

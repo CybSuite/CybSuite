@@ -697,12 +697,8 @@ export function EntityFormDialog({
 				// Handle tags and number_tags fields - they should be stringified JSON
 				if (field.type === 'tags' || field.type === 'number_tags') {
 					if (Array.isArray(fieldValue)) {
-						// Only include tags fields that are not empty
-						if (fieldValue.length > 0) {
-							// Convert array to stringified JSON for Django JSON field
-							cleanData[field.name] = JSON.stringify(fieldValue);
-						}
-						// If empty, don't include the field at all
+						// Convert array to stringified JSON for Django JSON field
+						cleanData[field.name] = JSON.stringify(fieldValue);
 					}
 					// If it's not an array, don't include it
 				}

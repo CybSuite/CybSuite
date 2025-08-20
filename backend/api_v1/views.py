@@ -252,7 +252,7 @@ def get_field_schema(request, entity, field):
 # Data Operations Endpoints
 @api_view(["GET"])
 def get_entity_data(request, entity):
-    """Get paginated list of records from an entity with optional filters"""
+    """Get paginated list of records from an entity with optional filters, sorting, and search"""
     db = CyberDB.from_default_config()
     if db is None:
         return Response(
@@ -263,10 +263,19 @@ def get_entity_data(request, entity):
     try:
         # Get query parameters
         skip = int(request.GET.get("skip", 0))
-        limit = None
-        # limit = request.GET.get('limit')  # TODO: uncomment when pagination from backend is needed
+        limit = request.GET.get("limit")
         search = request.GET.get("search")
         filters = request.GET.get("filters")
+
+        # Server-side table management parameters
+        sort_by = request.GET.get("sort_by")  # field name to sort by
+        sort_desc = (
+            request.GET.get("sort_desc", "false").lower() == "true"
+        )  # sort direction
+        server_search = request.GET.get("server_search")  # server-side search query
+        server_filters = request.GET.get(
+            "server_filters"
+        )  # JSON string of server-side filters
 
         if limit:
             limit = int(limit)
@@ -285,7 +294,164 @@ def get_entity_data(request, entity):
         # Get the queryset
         queryset = db.request(entity)
 
-        # Apply column filters if provided
+        # Get total count before applying filters (for pagination metadata)
+        total_count = queryset.count()
+
+        # Apply server-side search if provided
+        if server_search:
+            # Get all fields from the model
+            model_fields = queryset.model._meta.fields
+
+            # Create a Q object for each field to search in
+            search_q_objects = []
+            for field in model_fields:
+                # Search in text and number fields, but skip dict fields since they'll be flattened
+                if (
+                    field.get_internal_type()
+                    in [
+                        "CharField",
+                        "TextField",
+                        "IntegerField",
+                        "FloatField",
+                        "DecimalField",
+                    ]
+                    and field.name not in dict_field_names
+                ):
+                    search_q_objects.append(
+                        Q(**{f"{field.name}__icontains": server_search})
+                    )
+
+            # Combine all Q objects with OR operator
+            if search_q_objects:
+                queryset = queryset.filter(reduce(operator.or_, search_q_objects))
+
+        # Apply server-side filters if provided
+        if server_filters:
+            try:
+                filter_data = json.loads(server_filters)
+                advanced_filters = filter_data.get("advancedFilters", [])
+                global_logic = filter_data.get("globalLogic", "and")
+
+                filter_q_objects = []
+
+                for filter_item in advanced_filters:
+                    column = filter_item.get("column")
+                    filter_operator = filter_item.get("operator")
+                    value = filter_item.get("value")
+
+                    if not column or not filter_operator:
+                        continue
+
+                    # Skip flattened field filters (handle post-processing)
+                    if "." in column and any(
+                        column.startswith(f"{df}.") for df in dict_field_names
+                    ):
+                        continue
+
+                    # Build Django ORM filter based on operator
+                    if filter_operator == "contains":
+                        filter_q_objects.append(Q(**{f"{column}__icontains": value}))
+                    elif filter_operator == "does_not_contain":
+                        filter_q_objects.append(~Q(**{f"{column}__icontains": value}))
+                    elif filter_operator == "is":
+                        filter_q_objects.append(Q(**{f"{column}__iexact": value}))
+                    elif filter_operator == "is_not":
+                        filter_q_objects.append(~Q(**{f"{column}__iexact": value}))
+                    elif filter_operator == "is_empty":
+                        filter_q_objects.append(
+                            Q(**{f"{column}__isnull": True})
+                            | Q(**{f"{column}__exact": ""})
+                        )
+                    elif filter_operator == "is_not_empty":
+                        filter_q_objects.append(
+                            ~Q(**{f"{column}__isnull": True})
+                            & ~Q(**{f"{column}__exact": ""})
+                        )
+                    elif filter_operator == "equals":
+                        if value is not None:
+                            filter_q_objects.append(Q(**{f"{column}__exact": value}))
+                    elif filter_operator == "not_equals":
+                        if value is not None:
+                            filter_q_objects.append(~Q(**{f"{column}__exact": value}))
+                    elif filter_operator == "greater_than":
+                        if value is not None:
+                            filter_q_objects.append(Q(**{f"{column}__gt": value}))
+                    elif filter_operator == "less_than":
+                        if value is not None:
+                            filter_q_objects.append(Q(**{f"{column}__lt": value}))
+                    elif filter_operator == "greater_equal":
+                        if value is not None:
+                            filter_q_objects.append(Q(**{f"{column}__gte": value}))
+                    elif filter_operator == "less_equal":
+                        if value is not None:
+                            filter_q_objects.append(Q(**{f"{column}__lte": value}))
+                    elif filter_operator == "has_any_of":
+                        if isinstance(value, list) and value:
+                            filter_q_objects.append(Q(**{f"{column}__in": value}))
+                    elif filter_operator == "has_none_of":
+                        if isinstance(value, list) and value:
+                            filter_q_objects.append(~Q(**{f"{column}__in": value}))
+                    elif filter_operator == "is_on":
+                        if value:
+                            filter_q_objects.append(Q(**{f"{column}__date": value}))
+                    elif filter_operator == "is_before":
+                        if value:
+                            filter_q_objects.append(Q(**{f"{column}__lt": value}))
+                    elif filter_operator == "is_after":
+                        if value:
+                            filter_q_objects.append(Q(**{f"{column}__gt": value}))
+                    elif filter_operator == "is_between":
+                        if (
+                            isinstance(value, dict)
+                            and value.get("start")
+                            and value.get("end")
+                        ):
+                            filter_q_objects.append(
+                                Q(
+                                    **{
+                                        f"{column}__range": [
+                                            value["start"],
+                                            value["end"],
+                                        ]
+                                    }
+                                )
+                            )
+
+                # Apply filters with global logic
+                if filter_q_objects:
+                    if global_logic == "and":
+                        for q_obj in filter_q_objects:
+                            queryset = queryset.filter(q_obj)
+                    else:  # 'or'
+                        queryset = queryset.filter(
+                            reduce(operator.or_, filter_q_objects)
+                        )
+
+            except json.JSONDecodeError:
+                return Response(
+                    {"error": "Invalid server_filters format"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Apply server-side sorting if provided
+        if sort_by:
+            # Check if sorting a flattened field (handle post-processing)
+            is_flattened_sort = "." in sort_by and any(
+                sort_by.startswith(f"{df}.") for df in dict_field_names
+            )
+
+            if not is_flattened_sort:
+                order_field = f"-{sort_by}" if sort_desc else sort_by
+                try:
+                    queryset = queryset.order_by(order_field)
+                except Exception:
+                    # If sorting fails, continue without sorting
+                    pass
+
+        # Get filtered count after applying search and filters
+        filtered_count = queryset.count()
+
+        # Apply column filters if provided (legacy support)
         if filters:
             try:
                 filter_dict = json.loads(filters)
@@ -306,8 +472,8 @@ def get_entity_data(request, entity):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        # Apply global search if provided
-        if search:
+        # Apply legacy global search if provided (and no server_search)
+        if search and not server_search:
             # Get all fields from the model
             model_fields = queryset.model._meta.fields
 
@@ -351,8 +517,123 @@ def get_entity_data(request, entity):
         else:
             flattened_items = serialized_items
 
-        # Apply post-processing filters and search for flattened fields (only if flattening is enabled)
-        if (filters or search) and flatten_dict_param and dict_field_names:
+        # Apply post-processing for flattened fields if needed
+        if flatten_dict_param and dict_field_names:
+            # Handle server-side sorting for flattened fields
+            if (
+                sort_by
+                and "." in sort_by
+                and any(sort_by.startswith(f"{df}.") for df in dict_field_names)
+            ):
+                flattened_items.sort(
+                    key=lambda x: str(x.get(sort_by, "")).lower(), reverse=sort_desc
+                )
+
+            # Handle server-side filters for flattened fields
+            if server_filters:
+                try:
+                    filter_data = json.loads(server_filters)
+                    advanced_filters = filter_data.get("advancedFilters", [])
+                    global_logic = filter_data.get("globalLogic", "and")
+
+                    filtered_items = []
+                    for item in flattened_items:
+                        filter_results = []
+
+                        for filter_item in advanced_filters:
+                            column = filter_item.get("column")
+                            filter_operator = filter_item.get("operator")
+                            value = filter_item.get("value")
+
+                            if not column or not filter_operator:
+                                continue
+
+                            # Only handle flattened field filters here
+                            if not (
+                                "." in column
+                                and any(
+                                    column.startswith(f"{df}.")
+                                    for df in dict_field_names
+                                )
+                            ):
+                                continue
+
+                            item_value = item.get(column, "")
+                            item_str = (
+                                str(item_value).lower()
+                                if item_value is not None
+                                else ""
+                            )
+                            value_str = str(value).lower() if value is not None else ""
+
+                            # Apply filter logic (simplified for flattened fields)
+                            if filter_operator == "contains":
+                                filter_results.append(value_str in item_str)
+                            elif filter_operator == "does_not_contain":
+                                filter_results.append(value_str not in item_str)
+                            elif filter_operator == "is":
+                                filter_results.append(item_str == value_str)
+                            elif filter_operator == "is_not":
+                                filter_results.append(item_str != value_str)
+                            elif filter_operator == "is_empty":
+                                filter_results.append(
+                                    not item_value or item_str.strip() == ""
+                                )
+                            elif filter_operator == "is_not_empty":
+                                filter_results.append(
+                                    item_value and item_str.strip() != ""
+                                )
+                            else:
+                                filter_results.append(
+                                    True
+                                )  # Unknown operator, include item
+
+                        # Apply global logic
+                        if filter_results:
+                            if global_logic == "and":
+                                include_item = all(filter_results)
+                            else:  # 'or'
+                                include_item = any(filter_results)
+                        else:
+                            include_item = True
+
+                        if include_item:
+                            filtered_items.append(item)
+
+                    flattened_items = filtered_items
+                except json.JSONDecodeError:
+                    pass  # Continue with original items
+
+            # Handle server-side search for flattened fields
+            if server_search:
+                search_filtered_items = []
+                search_lower = server_search.lower()
+
+                for item in flattened_items:
+                    # Check if search term appears in any flattened field
+                    found_in_flattened = False
+                    for key, value in item.items():
+                        if any(key.startswith(f"{df}.") for df in dict_field_names):
+                            if search_lower in str(value).lower():
+                                found_in_flattened = True
+                                break
+
+                    # Include if found in flattened fields OR if already included from database search
+                    if found_in_flattened:
+                        search_filtered_items.append(item)
+
+                # If we found matches in flattened fields, use those
+                # Otherwise, keep the original items (they matched in database fields)
+                if search_filtered_items or not flattened_items:
+                    flattened_items = search_filtered_items
+
+        # Apply post-processing filters and search for flattened fields (legacy support)
+        if (
+            (filters or search)
+            and flatten_dict_param
+            and dict_field_names
+            and not (server_filters or server_search)
+        ):
             filtered_items = []
             for item in flattened_items:
                 include_item = True
@@ -418,7 +699,25 @@ def get_entity_data(request, entity):
 
             flattened_items = filtered_items
 
-        return Response(flattened_items)
+        # Return response with pagination metadata
+        current_page = skip // limit if limit > 0 else 0
+        total_pages = (filtered_count + limit - 1) // limit if limit > 0 else 1
+
+        response_data = {
+            "data": flattened_items,
+            "pagination": {
+                "total": total_count,
+                "filtered": filtered_count,
+                "skip": skip,
+                "limit": limit,
+                "current_page": current_page,
+                "total_pages": total_pages,
+                "has_next": (current_page + 1) < total_pages,
+                "has_prev": current_page > 0,
+            },
+        }
+
+        return Response(response_data)
 
     except Exception as e:
         return Response(
@@ -1617,5 +1916,233 @@ def get_entity_form_options(request, entity, field_name):
     except Exception as e:
         return Response(
             {"error": f"Error fetching field options: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["GET"])
+def get_related_records(request, entity, pretty_id):
+    """
+    Get records related to a specific entity record.
+    This endpoint returns a map of entity types to their related records,
+    filtered server-side instead of fetching all data and filtering client-side.
+    """
+    db = CyberDB.from_default_config()
+    if db is None:
+        return Response(
+            {"error": "Database not available"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    try:
+        # First, get the main record using the same logic as get_record_detail
+        obj = None
+
+        # First try to get by numeric ID
+        try:
+            numeric_id = int(pretty_id)
+            obj = db.first(entity, id=numeric_id)
+        except ValueError:
+            # record_id is not numeric, treat as pretty_id
+            pass
+
+        # If not found by ID, try to find by pretty_id
+        if obj is None:
+            # URL decode the pretty_id
+            decoded_pretty_id = url_decode_pretty_id(pretty_id)
+
+            # Get pretty_id configuration for this entity
+            pretty_id_fields, separator = get_entity_pretty_id_config(
+                cyberdb_schema, entity
+            )
+
+            if pretty_id_fields:
+                # Parse the pretty_id into field values with relation resolution
+                field_values = parse_pretty_id_with_relations(
+                    decoded_pretty_id,
+                    entity,
+                    cyberdb_schema,
+                    db,
+                    pretty_id_fields,
+                    separator,
+                )
+
+                # Build filter kwargs for the database query
+                filter_kwargs = {}
+                for field_name, field_value in field_values.items():
+                    if field_value:  # Only add non-empty values
+                        filter_kwargs[field_name] = field_value
+
+                # Query the database with the parsed field values
+                if filter_kwargs:
+                    obj = db.first(entity, **filter_kwargs)
+
+        if obj is None:
+            return Response(
+                {
+                    "error": f"Record with id/pretty_id '{pretty_id}' not found in entity {entity}"
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Serialize the main record to get field values
+        main_record = serialize_model(cyberdb_schema, obj, entity)
+
+        # Get the entity schema to identify relation fields
+        entity_desc = cyberdb_schema[entity]
+        related_data = {}
+        related_schemas = {}
+
+        # First, initialize all possible related entities (even with empty arrays)
+        for field_desc in entity_desc:
+            # Skip if field doesn't have a relationship or doesn't have a referenced entity
+            if not field_desc.has_relationship() or not field_desc.referenced_entity:
+                continue
+
+            referenced_entity_name = (
+                field_desc.referenced_entity.name
+                if hasattr(field_desc.referenced_entity, "name")
+                else str(field_desc.referenced_entity)
+            )
+
+            # Initialize related data and schema for this entity type
+            if referenced_entity_name not in related_data:
+                related_data[referenced_entity_name] = []
+                related_schemas[
+                    referenced_entity_name
+                ] = referenced_entity_name  # Just store entity name for now
+
+        # Now find all relation fields and populate actual data
+        for field_desc in entity_desc:
+            # Skip if field doesn't have a relationship or doesn't have a referenced entity
+            if not field_desc.has_relationship() or not field_desc.referenced_entity:
+                continue
+
+            referenced_entity_name = (
+                field_desc.referenced_entity.name
+                if hasattr(field_desc.referenced_entity, "name")
+                else str(field_desc.referenced_entity)
+            )
+            field_name = field_desc.name
+            field_value = main_record.get(field_name)
+
+            # Skip if field value is empty - but keep the empty array in related_data
+            if not field_value:
+                continue
+
+            # Query related records based on field value
+            related_records = []
+
+            if isinstance(field_value, list):
+                # Handle array/many-to-many relations
+                for item in field_value:
+                    if isinstance(item, dict) and "id" in item:
+                        # Field value is already serialized with id
+                        try:
+                            related_obj = db.first(
+                                referenced_entity_name, id=item["id"]
+                            )
+                            if related_obj:
+                                related_records.append(related_obj)
+                        except:
+                            pass
+                    elif isinstance(item, (int, str)):
+                        # Field value is just an ID
+                        try:
+                            related_obj = db.first(referenced_entity_name, id=item)
+                            if related_obj:
+                                related_records.append(related_obj)
+                        except:
+                            pass
+            elif isinstance(field_value, dict) and "id" in field_value:
+                # Handle single foreign key relation
+                try:
+                    related_obj = db.first(referenced_entity_name, id=field_value["id"])
+                    if related_obj:
+                        related_records.append(related_obj)
+                except:
+                    pass
+            elif isinstance(field_value, (int, str)):
+                # Handle single foreign key relation (just ID)
+                try:
+                    related_obj = db.first(referenced_entity_name, id=field_value)
+                    if related_obj:
+                        related_records.append(related_obj)
+                except:
+                    pass
+
+            # Serialize and add unique related records
+            for related_obj in related_records:
+                serialized_related = serialize_model(
+                    cyberdb_schema, related_obj, referenced_entity_name
+                )
+                # Check if this record is already in the list (avoid duplicates)
+                if not any(
+                    r.get("id") == serialized_related.get("id")
+                    for r in related_data[referenced_entity_name]
+                ):
+                    related_data[referenced_entity_name].append(
+                        serialized_related
+                    )  # Convert schemas to the format expected by frontend
+        formatted_schemas = {}
+        for entity_name in related_schemas.keys():
+            # Get schema for related entity, filtering out reverse relations
+            related_entity_desc = cyberdb_schema[entity_name]
+
+            # Convert field descriptions to the format expected by frontend
+            formatted_fields = {}
+            for field_desc in related_entity_desc:
+                # Skip reverse relations pointing back to the main entity
+                if (
+                    hasattr(field_desc, "referenced_entity")
+                    and field_desc.referenced_entity
+                ):
+                    ref_entity_name = (
+                        field_desc.referenced_entity.name
+                        if hasattr(field_desc.referenced_entity, "name")
+                        else str(field_desc.referenced_entity)
+                    )
+                    if ref_entity_name == entity:
+                        continue
+
+                # Get referenced entity name as string, not object
+                referenced_entity_name = None
+                if (
+                    hasattr(field_desc, "referenced_entity")
+                    and field_desc.referenced_entity
+                ):
+                    referenced_entity_name = (
+                        field_desc.referenced_entity.name
+                        if hasattr(field_desc.referenced_entity, "name")
+                        else str(field_desc.referenced_entity)
+                    )
+
+                formatted_fields[field_desc.name] = {
+                    "name": field_desc.name,
+                    "annotation": str(field_desc.annotation),
+                    "referenced_entity": referenced_entity_name,
+                    "is_linked_by_related_name": getattr(
+                        field_desc, "is_linked_by_related_name", False
+                    ),
+                    "choices": getattr(field_desc, "choices", None),
+                    "hidden_in_list": getattr(field_desc, "hidden_in_list", False),
+                    "pretty_name": getattr(field_desc, "pretty_name", None),
+                    "display_name": getattr(field_desc, "display_name", None),
+                    "description": getattr(field_desc, "description", None),
+                    # Add other field properties as needed
+                }
+
+            formatted_schemas[entity_name] = {
+                "name": entity_name,
+                "fields": formatted_fields,
+            }
+
+        return Response(
+            {"relatedData": related_data, "relatedSchemas": formatted_schemas}
+        )
+
+    except Exception as e:
+        return Response(
+            {"error": f"Error fetching related records: {str(e)}"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
