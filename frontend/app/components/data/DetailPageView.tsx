@@ -21,7 +21,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Edit, Trash2, Link2, Hash, Calendar, List, ToggleLeft, CircleQuestionMark, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Link2, Hash, Calendar, List, ToggleLeft, CircleQuestionMark, RefreshCw, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { parseFieldAnnotation, getFieldDisplayName } from '@/app/lib/schema-utils';
 import { api } from "@/app/lib/api";
@@ -277,13 +277,33 @@ export default function DetailPageView({ schema, record, model, relatedData, rel
 
                             const needsTooltip = displayText.length > 30;
 
-                            const badgeElement = (
+                            // Get the ID and entity type for linking
+                            const itemId = typeof item === 'object' && item !== null ? item.id : item;
+                            const linkedEntityType = typeInfo.referencedEntity;
+
+                            const badgeContent = (
+                                <div className="flex items-center gap-1">
+                                    <ExternalLink className="h-3 w-3" />
+                                    {truncatedText}
+                                </div>
+                            );
+
+                            const badgeElement = linkedEntityType && itemId ? (
+                                <Link key={index} href={`/data/${linkedEntityType}/${itemId}`} className="no-underline">
+                                    <Badge
+                                        variant="outline"
+                                        className="text-xs bg-blue-100 text-blue-700 border-blue-200 max-w-xs truncate hover:bg-blue-200 transition-colors cursor-pointer"
+                                    >
+                                        {badgeContent}
+                                    </Badge>
+                                </Link>
+                            ) : (
                                 <Badge
                                     key={index}
                                     variant="outline"
                                     className="text-xs bg-blue-100 text-blue-700 border-blue-200 max-w-xs truncate"
                                 >
-                                    {truncatedText}
+                                    {badgeContent}
                                 </Badge>
                             );
 
@@ -380,7 +400,7 @@ export default function DetailPageView({ schema, record, model, relatedData, rel
                             </div>
                         </div>
                     </div>
-                    <div className="flex items-center space-x-2 ml-4">
+                    <div className="self-start flex items-center space-x-2 ml-4">
                         {typeInfo.isRelation && !isEmpty && (
                             <ScrollToTableButton
                                 entityType={typeInfo.referencedEntity || field.name.replace(/s$/, '')}

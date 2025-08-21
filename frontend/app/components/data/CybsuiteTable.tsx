@@ -335,9 +335,11 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
 
     // Default columns if none provided
     const defaultColumns = React.useMemo<ColumnDef<TData>[]>(() => {
-        if (data.length === 0) return [];
+        if (!data || data.length === 0) return [];
 
         const sampleRow = data[0];
+        if (!sampleRow || typeof sampleRow !== 'object') return [];
+
         return Object.keys(sampleRow).map((key) => {
             const title = key.charAt(0).toUpperCase() + key.slice(1);
             return {
@@ -410,7 +412,7 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
 
     // Create table instance
     const table = useReactTable({
-        data,
+        data: data || [],
         columns,
         state: {
             sorting,
@@ -420,7 +422,7 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
             pagination,
             globalFilter,
         },
-        pageCount: enablePagination ? Math.ceil(data.length / pagination.pageSize) : -1,
+        pageCount: enablePagination ? Math.ceil((data || []).length / pagination.pageSize) : -1,
         onSortingChange: setSorting,
         onColumnFiltersChange: setColumnFilters,
         onColumnVisibilityChange: setColumnVisibility,
@@ -538,22 +540,22 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
                             size="sm"
                             onClick={() => {
                                 const selectedRows = table.getFilteredSelectedRowModel().rows.map(row => row.original);
-                                onRowAction?.("bulkUpdate", selectedRows);
+                                onRowAction?.("export", selectedRows);
                             }}
                         >
-                            <Edit className="mr-2 h-4 w-4" />
-                            Bulk Update ({selectedRowsCount})
+                            <Download className="mr-2 h-4 w-4" />
+                            Export ({selectedRowsCount})
                         </Button>
                         <Button
                             variant="outline"
                             size="sm"
                             onClick={() => {
                                 const selectedRows = table.getFilteredSelectedRowModel().rows.map(row => row.original);
-                                onRowAction?.("export", selectedRows);
+                                onRowAction?.("bulkUpdate", selectedRows);
                             }}
                         >
-                            <Download className="mr-2 h-4 w-4" />
-                            Export ({selectedRowsCount})
+                            <Edit className="mr-2 h-4 w-4" />
+                            Bulk Update ({selectedRowsCount})
                         </Button>
                         <Button
                             variant="outline"

@@ -236,6 +236,11 @@ export const api = {
         search?: string;
         filters?: string;
         flattenDict?: boolean;
+        // Server-side table management
+        sortBy?: string;
+        sortDesc?: boolean;
+        serverSearch?: string;
+        serverFilters?: string;
       }
     ) => {
       const searchParams = new URLSearchParams();
@@ -247,11 +252,28 @@ export const api = {
       if (params?.filters) searchParams.set("filters", params.filters);
       if (params?.flattenDict) searchParams.set("flatten_dict", "true");
 
+      // Server-side table management parameters
+      if (params?.sortBy) searchParams.set("sort_by", params.sortBy);
+      if (params?.sortDesc !== undefined)
+        searchParams.set("sort_desc", params.sortDesc.toString());
+      if (params?.serverSearch) searchParams.set("server_search", params.serverSearch);
+      if (params?.serverFilters) searchParams.set("server_filters", params.serverFilters);
+
       const queryString = searchParams.toString();
       const endpoint = `/api/v1/data/entity/${entity}/${
         queryString ? `?${queryString}` : ""
       }`;
-      return apiClient.get<EntityRecord[]>(endpoint);
+      return apiClient.get<{
+        data: EntityRecord[];
+        pagination?: {
+          total: number;
+          filtered: number;
+          skip: number;
+          limit: number | null;
+          has_next: boolean;
+          has_prev: boolean;
+        };
+      } | EntityRecord[]>(endpoint);
     },
     getEntityOptions: (
       entity: string,
@@ -285,6 +307,15 @@ export const api = {
       return apiClient.get<EntityRecord>(
         `/api/v1/data/record/${entity}/${id}/${params}`
       );
+    },
+    getRelatedRecords: (
+      entity: string,
+      id: string | number
+    ) => {
+      return apiClient.get<{
+        relatedData: Record<string, EntityRecord[]>;
+        relatedSchemas: Record<string, EntitySchema>;
+      }>(`/api/v1/data/related/${entity}/${id}/`);
     },
     createRecord: (entity: string, data: Partial<EntityRecord>) =>
       apiClient.post<EntityRecord>(`/api/v1/data/record/${entity}/`, data),
@@ -496,7 +527,17 @@ export const serverApi = {
       const endpoint = `/api/v1/data/entity/${entity}/${
         queryString ? `?${queryString}` : ""
       }`;
-      return createServerApiClient(cookies).get<EntityRecord[]>(endpoint);
+      return createServerApiClient(cookies).get<{
+        data: EntityRecord[];
+        pagination?: {
+          total: number;
+          filtered: number;
+          skip: number;
+          limit: number | null;
+          has_next: boolean;
+          has_prev: boolean;
+        };
+      } | EntityRecord[]>(endpoint);
     },
     getEntityOptions: (
       entity: string,
@@ -537,6 +578,16 @@ export const serverApi = {
       return createServerApiClient(cookies).get<EntityRecord>(
         `/api/v1/data/record/${entity}/${id}/${params}`
       );
+    },
+    getRelatedRecords: (
+      entity: string,
+      id: string | number,
+      cookies?: string
+    ) => {
+      return createServerApiClient(cookies).get<{
+        relatedData: Record<string, EntityRecord[]>;
+        relatedSchemas: Record<string, EntitySchema>;
+      }>(`/api/v1/data/related/${entity}/${id}/`);
     },
     createRecord: (
       entity: string,

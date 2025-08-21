@@ -9,10 +9,12 @@ import { cn } from "@/lib/utils";
 interface DataTableAdvancedToolbarProps<TData>
   extends React.ComponentProps<"div"> {
   table: Table<TData>;
+  columns?: any[]; // Add columns prop for server-managed tables
 }
 
 export function DataTableAdvancedToolbar<TData>({
   table,
+  columns,
   children,
   className,
   ...props
@@ -29,7 +31,7 @@ export function DataTableAdvancedToolbar<TData>({
     >
       <div className="flex flex-1 flex-wrap items-center gap-2">{children}</div>
       <div className="flex items-center gap-2">
-        <DataTableViewOptions table={table} />
+        <DataTableViewOptions table={table} columns={columns} />
       </div>
     </div>
   );

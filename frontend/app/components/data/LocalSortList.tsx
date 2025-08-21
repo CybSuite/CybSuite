@@ -9,12 +9,15 @@ import { ArrowUpDown, ArrowUp, ArrowDown, GripVertical, X, Plus } from "lucide-r
 
 interface LocalSortListProps<TData> {
     table: any;
+    columns?: any[]; // Add columns prop as backup
     sorting: any[];
     onSortingChange: any;
+    // Server-side support
+    isServerManaged?: boolean;
 }
 
 // Local Sort List Component (Exact DiceUI styling with local state + drag and drop)
-function LocalSortList<TData>({ table, sorting, onSortingChange }: LocalSortListProps<TData>) {
+function LocalSortList<TData>({ table, columns: directColumns, sorting, onSortingChange, isServerManaged = false }: LocalSortListProps<TData>) {
     const [open, setOpen] = React.useState(false);
     const [addColumnOpen, setAddColumnOpen] = React.useState(false);
 
@@ -24,7 +27,23 @@ function LocalSortList<TData>({ table, sorting, onSortingChange }: LocalSortList
         const availableColumns: { id: string; label: string }[] = [];
 
         try {
-            for (const column of table.getAllColumns()) {
+            let allColumns: any[] = [];
+
+            if (directColumns && directColumns.length > 0) {
+                // Use direct columns if provided (for server-managed mode)
+                allColumns = directColumns.map((col, index) => ({
+                    id: col.id || col.accessorKey || `column-${index}`,
+                    columnDef: col,
+                    getCanSort: () => col.enableSorting !== false
+                }));
+            } else if (table && table.getAllColumns) {
+                // Fallback to table columns
+                allColumns = table.getAllColumns();
+            } else {
+                return { columnLabels: labels, columns: availableColumns };
+            }
+
+            for (const column of allColumns) {
                 if (!column.getCanSort()) continue;
 
                 const label = column.columnDef.meta?.label ?? column.id;
@@ -42,7 +61,7 @@ function LocalSortList<TData>({ table, sorting, onSortingChange }: LocalSortList
             columnLabels: labels,
             columns: availableColumns,
         };
-    }, [sorting, table]);
+    }, [sorting, table, directColumns]);
 
     // Clean up when popup closes
     React.useEffect(() => {

@@ -49,6 +49,23 @@ export default async function ModelPage({ params }: ModelPageProps) {
 		serverApi.form.getFormSchema(model, cookieHeader),
 	]);
 
+	// Extract data from the response - handle both old and new response formats
+	let initialData = [];
+	let initialPagination = null;
+
+	if (initialDataResponse.data) {
+		if (Array.isArray(initialDataResponse.data)) {
+			// Old format: direct array
+			initialData = initialDataResponse.data;
+		} else if (typeof initialDataResponse.data === 'object' && 'data' in initialDataResponse.data) {
+			// New format: {data: [], pagination: {}}
+			initialData = (initialDataResponse.data as any).data || [];
+			if ('pagination' in initialDataResponse.data) {
+				initialPagination = (initialDataResponse.data as any).pagination;
+			}
+		}
+	}
+
 	// Pre-load field options for relation and enum fields if form schema is available
 	let preloadedFieldOptions = {};
 	if (formSchemaResponse.data && !formSchemaResponse.error) {
@@ -136,10 +153,12 @@ export default async function ModelPage({ params }: ModelPageProps) {
 					{/* Dynamic Data Table */}
 					<ModelDataTable
 						model={model}
-						initialData={initialDataResponse.data || []}
+						initialData={initialData}
 						initialSchema={modelSchemaResponse.data}
 						initialFormSchema={formSchemaResponse.data}
 						initialFieldOptions={preloadedFieldOptions}
+						initialPagination={initialPagination}
+						isServerManaged={true}
 						showAddButton
 					/>
 				</>

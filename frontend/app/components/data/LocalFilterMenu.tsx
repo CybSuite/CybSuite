@@ -21,27 +21,67 @@ import { Filter, Plus, X, ChevronDown } from "lucide-react";
 
 interface LocalFilterMenuProps {
     table: any;
+    columns?: any[]; // Add columns prop as backup
     onFiltersChange?: (hasFilters: boolean) => void;
+    // Server-side support
+    isServerManaged?: boolean;
+    onServerFiltersChange?: (filters: any) => void;
+    currentServerFilters?: any;
 }
 
 // Local Filter Menu Component (independent of URL parameters)
 const LocalFilterMenu = React.forwardRef<
     { resetFilters: () => void },
     LocalFilterMenuProps
->(({ table, onFiltersChange }, ref) => {
+>(({ table, columns: directColumns, onFiltersChange, isServerManaged = false, onServerFiltersChange, currentServerFilters }, ref) => {
     const [open, setOpen] = React.useState(false);
     const [filters, setFilters] = React.useState<any[]>([]);
     const [globalLogic, setGlobalLogic] = React.useState<'and' | 'or'>('and');
 
+    // Initialize filters from server state if in server-managed mode
+    React.useEffect(() => {
+        if (isServerManaged) {
+            if (currentServerFilters?.advancedFilters) {
+                const formattedFilters = currentServerFilters.advancedFilters.map((filter: any, index: number) => ({
+                    id: `filter-${index}`,
+                    column: filter.column || '',
+                    operator: filter.operator || '',
+                    value: filter.value || '',
+                }));
+                setFilters(formattedFilters);
+                setGlobalLogic(currentServerFilters.globalLogic || 'and');
+            } else {
+                // If currentServerFilters is empty or undefined, clear local filters
+                setFilters([]);
+                setGlobalLogic('and');
+            }
+        }
+    }, [isServerManaged, currentServerFilters]);
+
     const filteredColumns = React.useMemo(() => {
         try {
-            return table.getAllColumns().filter((column: any) =>
+            let allColumns: any[] = [];
+
+            if (directColumns && directColumns.length > 0) {
+                // Use direct columns if provided (for server-managed mode)
+                allColumns = directColumns.map((col, index) => ({
+                    id: col.id || col.accessorKey || `column-${index}`,
+                    columnDef: col
+                }));
+            } else if (table && table.getAllColumns) {
+                // Fallback to table columns
+                allColumns = table.getAllColumns();
+            } else {
+                return [];
+            }
+
+            return allColumns.filter((column: any) =>
                 column.columnDef.enableColumnFilter && column.columnDef.meta?.label
             );
         } catch {
             return [];
         }
-    }, [table]);
+    }, [table, directColumns]);
 
     // Filter operators based on column type
     const getFilterOperators = (columnType: string) => {
@@ -126,29 +166,50 @@ const LocalFilterMenu = React.forwardRef<
 
     // Apply filters to the table (auto-apply on changes)
     const applyFilters = React.useCallback(() => {
-        // Create a custom global filter function that handles our advanced filters
-        const validFilters = filters.filter(filter => filter.column && filter.operator);
+        const validFilters = filters.filter(filter =>
+            filter.column && filter.operator &&
+            (filter.operator === 'is_empty' || filter.operator === 'is_not_empty' || filter.value !== '')
+        );
 
-        if (validFilters.length === 0) {
-            table.setGlobalFilter(undefined);
-            return;
+        if (isServerManaged) {
+            // Server-managed mode: call server callback
+            const filterData = {
+                advancedFilters: validFilters,
+                globalLogic
+            };
+            onServerFiltersChange?.(filterData);
+        } else {
+            // Local mode: apply to table directly
+            if (validFilters.length === 0) {
+                table.setGlobalFilter(undefined);
+            } else {
+                table.setGlobalFilter({ advancedFilters: validFilters, globalLogic });
+            }
         }
+    }, [filters, globalLogic, table, isServerManaged, onServerFiltersChange]);
 
-        // Set the global filter to a unique object that our custom global filter function will recognize
-        table.setGlobalFilter({ advancedFilters: validFilters, globalLogic });
-    }, [filters, globalLogic, table]);
-
-    // Auto-apply filters when filters or globalLogic changes
+    // Auto-apply filters when filters or globalLogic changes (only for local mode)
     React.useEffect(() => {
-        applyFilters();
+        if (!isServerManaged) {
+            // Only auto-apply for local (client-side) mode
+            applyFilters();
+        }
         onFiltersChange?.(filters.length > 0);
-    }, [applyFilters, filters.length, onFiltersChange]);
+    }, [applyFilters, filters.length, onFiltersChange, isServerManaged]);
 
     // Reset filters
     const resetFilters = React.useCallback(() => {
         setFilters([]);
-        table.setGlobalFilter(undefined);
-    }, [table]);
+        setGlobalLogic('and');
+
+        if (isServerManaged) {
+            // Server-managed mode: call server callback with empty filters
+            onServerFiltersChange?.({});
+        } else {
+            // Local mode: clear table filter
+            table.setGlobalFilter(undefined);
+        }
+    }, [table, isServerManaged, onServerFiltersChange]);
 
     // Expose reset function to parent
     React.useImperativeHandle(ref, () => ({
@@ -269,7 +330,7 @@ const LocalFilterMenu = React.forwardRef<
                     )}
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[600px] p-0" align="end">
+            <PopoverContent className="min-w-[600px] w-fit p-0" align="end">
                 <div className="p-4 border-b">
                     <h4 className="font-medium mb-1">Filters</h4>
                     <p className="text-sm text-muted-foreground">
@@ -414,6 +475,16 @@ const LocalFilterMenu = React.forwardRef<
                             <Plus className="mr-2 h-4 w-4" />
                             Add filter
                         </Button>
+                        {isServerManaged && (
+                            <Button
+                                variant="default"
+                                size="sm"
+                                onClick={applyFilters}
+                                className="flex-1"
+                            >
+                                Apply filters
+                            </Button>
+                        )}
                         <Button
                             variant="outline"
                             size="sm"

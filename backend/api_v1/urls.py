@@ -33,6 +33,11 @@ urlpatterns = [
         views.get_record_detail,
         name="record_detail",
     ),
+    path(
+        "data/related/<str:entity>/<str:pretty_id>/",
+        views.get_related_records,
+        name="related_records",
+    ),
     path("data/count/<str:entity>/", views.get_entity_count, name="entity_count"),
     path("data/record/<str:entity>/", views.create_record, name="create_record"),
     path("data/new/<str:entity>/", views.create_record, name="create_new_record"),
