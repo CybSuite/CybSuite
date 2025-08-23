@@ -20,6 +20,7 @@ export interface FieldSchema {
   indexed: boolean;
   unique: boolean;
   nullable: boolean;
+  not_editable?: boolean;
   hidden_in_list: boolean;
   hidden_in_detail: boolean;
   in_filter_query: boolean;

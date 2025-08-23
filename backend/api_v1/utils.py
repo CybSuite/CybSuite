@@ -1,7 +1,11 @@
+import json
+import operator
+from functools import reduce
 from typing import Dict
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError
+from django.db.models import Q, QuerySet
 
 
 def get_db(CyberDB):
@@ -147,13 +151,12 @@ def flatten_dict(data, parent_key="", sep=".", max_depth=1, current_depth=0):
     return dict(items)
 
 
-def get_flattened_columns_from_sample_data(entity, db, dict_field_names):
+def get_flattened_columns_from_sample_data(data: QuerySet | list, dict_field_names):
     """
     Analyze sample data to determine all possible flattened columns and their types.
 
     Args:
-        entity: Entity name
-        db: Database connection
+        data: QuerySet or list of records to analyze
         dict_field_names: List of dict field names to analyze
 
     Returns:
@@ -162,17 +165,26 @@ def get_flattened_columns_from_sample_data(entity, db, dict_field_names):
     if not dict_field_names:
         return {}
 
-    # Get a sample of records to analyze (limit to first 100 for efficiency)
-    queryset = db.request(entity)[:100]
-    items = list(queryset)
+    if isinstance(data, QuerySet):
+        items = list(data)
+    else:
+        items = data
 
     flattened_columns = {}
     type_frequency = {}  # Track type frequency for better type inference
 
     for item in items:
         for field_name in dict_field_names:
-            if hasattr(item, field_name):
-                field_value = getattr(item, field_name)
+            if (
+                isinstance(data, QuerySet)
+                and hasattr(item, field_name)
+                or field_name in item
+            ):
+                field_value = (
+                    getattr(item, field_name)
+                    if isinstance(data, QuerySet)
+                    else item.get(field_name)
+                )
                 if field_value and isinstance(field_value, dict):
                     # Use one-level flattening for consistency
                     flattened_data = flatten_dict(field_value, field_name, max_depth=1)
@@ -305,3 +317,557 @@ def map_koalak_type_to_form_type(field_desc):
         return "json"
     else:
         return "string"
+
+
+def get_empty_field_description(
+    entity,
+    name,
+    display_name,
+    annotation,
+    description=None,
+    choices=None,
+    editable=None,
+):
+    return {
+        "name": name,
+        "pretty_name": display_name,
+        "plural_name": display_name + "s",
+        "display_name": display_name,
+        "dest": None,
+        "default": "NOTHING",
+        "choices": choices,
+        "annotation": annotation,
+        "description": description,
+        "examples": None,
+        "element_examples": None,
+        "indexed": False,
+        "unique": False,
+        "nullable": True,
+        "not_editable": not bool(editable),
+        "hidden_in_list": False,
+        "hidden_in_detail": False,
+        "in_filter_query": True,
+        "is_linked_by_related_name": False,
+        "entity": entity,
+        "referenced_entity": None,
+    }
+
+
+def get_data_table_params(request):
+    skip = int(request.GET.get("skip", 0))
+    limit = request.GET.get("limit", 0)
+    search = request.GET.get("search")
+    filters = request.GET.get("filters")
+
+    # Server-side table management parameters
+    sort_by = request.GET.get("sort_by")  # field name to sort by
+    sort_desc = (
+        request.GET.get("sort_desc", "false").lower() == "true"
+    )  # sort direction
+    server_search = request.GET.get("server_search")  # server-side search query
+    server_filters = request.GET.get(
+        "server_filters"
+    )  # JSON string of server-side filters
+
+    if limit and limit != 0:
+        limit = int(limit)
+
+    # Check if dict flattening is requested
+    flatten_dict_param = request.GET.get("flatten_dict", "false").lower() == "true"
+
+    return (
+        skip,
+        limit,
+        search,
+        filters,
+        sort_by,
+        sort_desc,
+        server_search,
+        server_filters,
+        flatten_dict_param,
+    )
+
+
+def filter_data_table_queryset(queryset, table_params, dict_field_names):
+    (
+        skip,
+        limit,
+        search,
+        filters,
+        sort_by,
+        sort_desc,
+        server_search,
+        server_filters,
+        _,
+    ) = table_params
+
+    # Fields added via extra() that can't be used in Django ORM filters
+    extra_fields = {
+        "max_severity",
+        "max_confidence",
+        "max_severity_rank",
+        "max_confidence_rank",
+    }
+
+    # Collect extra field filters for post-processing
+    extra_field_filters = []
+
+    # Apply server-side search if provided
+    if server_search:
+        # Get all fields from the model
+        model_fields = queryset.model._meta.fields
+
+        # Create a Q object for each field to search in
+        search_q_objects = []
+        for field in model_fields:
+            # Search in text and number fields, but skip dict fields since they'll be flattened
+            if (
+                field.get_internal_type()
+                in [
+                    "CharField",
+                    "TextField",
+                    "IntegerField",
+                    "FloatField",
+                    "DecimalField",
+                ]
+                and field.name not in dict_field_names
+                and field.name not in extra_fields
+            ):
+                search_q_objects.append(
+                    Q(**{f"{field.name}__icontains": server_search})
+                )
+
+        # Combine all Q objects with OR operator
+        if search_q_objects:
+            queryset = queryset.filter(reduce(operator.or_, search_q_objects))
+
+    # Apply server-side filters if provided
+    if server_filters:
+        try:
+            filter_data = json.loads(server_filters)
+            advanced_filters = filter_data.get("advancedFilters", [])
+            global_logic = filter_data.get("globalLogic", "and")
+
+            filter_q_objects = []
+
+            for filter_item in advanced_filters:
+                column = filter_item.get("column")
+                filter_operator = filter_item.get("operator")
+                value = filter_item.get("value")
+
+                if not column or not filter_operator:
+                    continue
+
+                # Skip flattened field filters (handle post-processing)
+                if "." in column and any(
+                    column.startswith(f"{df}.") for df in dict_field_names
+                ):
+                    continue
+
+                # Collect extra field filters for post-processing
+                if column in extra_fields:
+                    extra_field_filters.append(
+                        {
+                            "column": column,
+                            "operator": filter_operator,
+                            "value": value,
+                            "global_logic": global_logic,
+                        }
+                    )
+                    continue
+
+                # Build Django ORM filter based on operator
+                if filter_operator == "contains":
+                    filter_q_objects.append(Q(**{f"{column}__icontains": value}))
+                elif filter_operator == "does_not_contain":
+                    filter_q_objects.append(~Q(**{f"{column}__icontains": value}))
+                elif filter_operator == "is":
+                    filter_q_objects.append(Q(**{f"{column}__iexact": value}))
+                elif filter_operator == "is_not":
+                    filter_q_objects.append(~Q(**{f"{column}__iexact": value}))
+                elif filter_operator == "is_empty":
+                    filter_q_objects.append(
+                        Q(**{f"{column}__isnull": True}) | Q(**{f"{column}__exact": ""})
+                    )
+                elif filter_operator == "is_not_empty":
+                    filter_q_objects.append(
+                        ~Q(**{f"{column}__isnull": True})
+                        & ~Q(**{f"{column}__exact": ""})
+                    )
+                elif filter_operator == "equals":
+                    if value is not None:
+                        filter_q_objects.append(Q(**{f"{column}__exact": value}))
+                elif filter_operator == "not_equals":
+                    if value is not None:
+                        filter_q_objects.append(~Q(**{f"{column}__exact": value}))
+                elif filter_operator == "greater_than":
+                    if value is not None:
+                        filter_q_objects.append(Q(**{f"{column}__gt": value}))
+                elif filter_operator == "less_than":
+                    if value is not None:
+                        filter_q_objects.append(Q(**{f"{column}__lt": value}))
+                elif filter_operator == "greater_equal":
+                    if value is not None:
+                        filter_q_objects.append(Q(**{f"{column}__gte": value}))
+                elif filter_operator == "less_equal":
+                    if value is not None:
+                        filter_q_objects.append(Q(**{f"{column}__lte": value}))
+                elif filter_operator == "has_any_of":
+                    if isinstance(value, list) and value:
+                        filter_q_objects.append(Q(**{f"{column}__in": value}))
+                elif filter_operator == "has_none_of":
+                    if isinstance(value, list) and value:
+                        filter_q_objects.append(~Q(**{f"{column}__in": value}))
+                elif filter_operator == "is_on":
+                    if value:
+                        filter_q_objects.append(Q(**{f"{column}__date": value}))
+                elif filter_operator == "is_before":
+                    if value:
+                        filter_q_objects.append(Q(**{f"{column}__lt": value}))
+                elif filter_operator == "is_after":
+                    if value:
+                        filter_q_objects.append(Q(**{f"{column}__gt": value}))
+                elif filter_operator == "is_between":
+                    if (
+                        isinstance(value, dict)
+                        and value.get("start")
+                        and value.get("end")
+                    ):
+                        filter_q_objects.append(
+                            Q(
+                                **{
+                                    f"{column}__range": [
+                                        value["start"],
+                                        value["end"],
+                                    ]
+                                }
+                            )
+                        )
+
+            # Apply filters with global logic
+            if filter_q_objects:
+                if global_logic == "and":
+                    for q_obj in filter_q_objects:
+                        queryset = queryset.filter(q_obj)
+                else:  # 'or'
+                    queryset = queryset.filter(reduce(operator.or_, filter_q_objects))
+
+        except json.JSONDecodeError:
+            # Return error information instead of Response object
+            return None, 0, [], None
+
+    # Check if we need post-processing sorting for extra fields
+    extra_field_sort = None
+    if sort_by and sort_by in extra_fields:
+        extra_field_sort = {"field": sort_by, "desc": sort_desc}
+        sort_by = None  # Don't apply database sorting for extra fields
+
+    # Apply server-side sorting if provided
+    if sort_by:
+        # Check if sorting a flattened field (handle post-processing)
+        is_flattened_sort = "." in sort_by and any(
+            sort_by.startswith(f"{df}.") for df in dict_field_names
+        )
+
+        if not is_flattened_sort:
+            order_field = f"-{sort_by}" if sort_desc else sort_by
+            try:
+                queryset = queryset.order_by(order_field)
+            except Exception:
+                # If sorting fails, continue without sorting
+                pass
+
+    # Get filtered count after applying search and filters
+    filtered_count = queryset.count()
+
+    # Apply column filters if provided (legacy support)
+    if filters:
+        try:
+            filter_dict = json.loads(filters)
+            for field, value in filter_dict.items():
+                if value:  # Only apply non-empty filters
+                    # Handle flattened field filters (e.g., "details.hello")
+                    if "." in field and any(
+                        field.startswith(f"{df}.") for df in dict_field_names
+                    ):
+                        # This is a flattened field filter - we'll need to apply it after serialization
+                        # For now, skip database-level filtering for flattened fields
+                        continue
+                    # Collect extra field filters for post-processing
+                    elif field in extra_fields:
+                        extra_field_filters.append(
+                            {
+                                "column": field,
+                                "operator": "contains",  # Legacy filters use contains
+                                "value": value,
+                                "global_logic": "and",
+                            }
+                        )
+                        continue
+                    else:
+                        queryset = queryset.filter(**{f"{field}__icontains": value})
+        except json.JSONDecodeError:
+            # Return error information instead of Response object
+            return None, 0, [], None
+
+    # Apply legacy global search if provided (and no server_search)
+    if search and not server_search:
+        # Get all fields from the model
+        model_fields = queryset.model._meta.fields
+
+        # Create a Q object for each field to search in
+        q_objects = []
+        for field in model_fields:
+            # Only search in text and number fields, but skip dict fields since they'll be flattened
+            if (
+                field.get_internal_type()
+                in [
+                    "CharField",
+                    "TextField",
+                    "IntegerField",
+                    "FloatField",
+                    "DecimalField",
+                ]
+                and field.name not in dict_field_names
+                and field.name not in extra_fields
+            ):
+                q_objects.append(Q(**{f"{field.name}__icontains": search}))
+
+        # Combine all Q objects with OR operator
+        if q_objects:
+            queryset = queryset.filter(reduce(operator.or_, q_objects))
+
+    # Always return the 4-tuple at the end of the function
+    return queryset, filtered_count, extra_field_filters, extra_field_sort
+
+
+def apply_extra_field_filters(items, extra_field_filters, global_logic="and"):
+    """
+    Apply filters to extra fields (fields added via extra()) at the post-processing level.
+
+    Args:
+        items: List of serialized items to filter
+        extra_field_filters: List of filter configurations for extra fields
+        global_logic: 'and' or 'or' logic for combining filters
+
+    Returns:
+        Filtered list of items
+    """
+    if not extra_field_filters:
+        return items
+
+    filtered_items = []
+
+    for item in items:
+        filter_results = []
+
+        for filter_config in extra_field_filters:
+            column = filter_config.get("column")
+            filter_operator = filter_config.get("operator")
+            value = filter_config.get("value")
+
+            if not column or not filter_operator:
+                continue
+
+            item_value = item.get(column)
+
+            # Apply filter logic
+            if filter_operator == "contains":
+                if item_value and value:
+                    filter_results.append(str(value).lower() in str(item_value).lower())
+                else:
+                    filter_results.append(False)
+            elif filter_operator == "does_not_contain":
+                if item_value and value:
+                    filter_results.append(
+                        str(value).lower() not in str(item_value).lower()
+                    )
+                else:
+                    filter_results.append(True)
+            elif filter_operator == "is" or filter_operator == "equals":
+                filter_results.append(
+                    str(item_value).lower() == str(value).lower()
+                    if item_value and value
+                    else item_value == value
+                )
+            elif filter_operator == "is_not" or filter_operator == "not_equals":
+                filter_results.append(
+                    str(item_value).lower() != str(value).lower()
+                    if item_value and value
+                    else item_value != value
+                )
+            elif filter_operator == "is_empty":
+                filter_results.append(not item_value or str(item_value).strip() == "")
+            elif filter_operator == "is_not_empty":
+                filter_results.append(item_value and str(item_value).strip() != "")
+            elif filter_operator == "has_any_of":
+                if isinstance(value, list) and value:
+                    filter_results.append(item_value in value)
+                else:
+                    filter_results.append(False)
+            elif filter_operator == "has_none_of":
+                if isinstance(value, list) and value:
+                    filter_results.append(item_value not in value)
+                else:
+                    filter_results.append(True)
+            else:
+                # Unknown operator, include item
+                filter_results.append(True)
+
+        # Apply global logic
+        if filter_results:
+            if global_logic == "and":
+                include_item = all(filter_results)
+            else:  # 'or'
+                include_item = any(filter_results)
+        else:
+            include_item = True
+
+        if include_item:
+            filtered_items.append(item)
+
+    return filtered_items
+
+
+def apply_extra_field_sort(items, extra_field_sort):
+    """
+    Apply sorting to extra fields at the post-processing level.
+
+    Args:
+        items: List of serialized items to sort
+        extra_field_sort: Dict with 'field' and 'desc' keys
+
+    Returns:
+        Sorted list of items
+    """
+    if not extra_field_sort:
+        return items
+
+    field = extra_field_sort.get("field")
+    desc = extra_field_sort.get("desc", False)
+
+    if not field:
+        return items
+
+    # Define sorting key function
+    def sort_key(item):
+        value = item.get(field, "")
+
+        # Handle None values
+        if value is None:
+            return 0  # Lowest rank for None values
+
+        # Use rank-based sorting for severity and confidence fields
+        if field == "max_severity":
+            return SEVERITY_RANKS.get(str(value).lower(), 0)
+        elif field == "max_confidence":
+            return CONFIDENCE_RANKS.get(str(value).lower(), 0)
+        else:
+            # For other fields, use alphabetic sorting
+            return str(value).lower()
+
+    return sorted(items, key=sort_key, reverse=desc)
+
+
+SEVERITY_RANKS = {
+    "undefined": 1,
+    "info": 2,
+    "low": 3,
+    "medium": 4,
+    "high": 5,
+    "critical": 6,
+}
+CONFIDENCE_RANKS = {
+    "undefined": 1,
+    "true_positive": 2,
+    "certain": 3,
+    "firm": 4,
+    "tentative": 5,
+    "manual": 6,
+    "false_positive": 7,
+}
+
+
+def get_max_severity_and_confidence(obj):
+    severities = [c.severity for c in obj.controls.all() if c.severity]
+    max_severity = (
+        max(severities, key=lambda s: SEVERITY_RANKS.get(s, 0)) if severities else None
+    )
+
+    highest_controls = [c for c in obj.controls.all() if c.severity == max_severity]
+    confidences = [c.confidence for c in highest_controls if c.confidence]
+    if max_severity is None:
+        max_confidence = None
+    else:
+        max_confidence = (
+            max(confidences, key=lambda c: CONFIDENCE_RANKS.get(c, 0))
+            if confidences
+            else None
+        )
+
+    return max_severity, max_confidence
+
+
+def annotate_with_severity_confidence_labels(queryset, is_observation):
+    if not queryset.exists():
+        return queryset
+
+    Control = queryset.first().controls.model
+
+    # Use raw SQL for direct label calculation to avoid any Django ORM complexity
+    control_table = Control._meta.db_table
+    control_def_table = queryset.model._meta.db_table
+
+    # Build the CASE statements for SQL ranking
+    severity_case_sql = (
+        "CASE "
+        + " ".join(
+            [f"WHEN c.severity = '{k}' THEN {v}" for k, v in SEVERITY_RANKS.items()]
+        )
+        + " ELSE 0 END"
+    )
+    confidence_case_sql = (
+        "CASE "
+        + " ".join(
+            [f"WHEN c.confidence = '{k}' THEN {v}" for k, v in CONFIDENCE_RANKS.items()]
+        )
+        + " ELSE 0 END"
+    )
+
+    # Build the CASE statements to convert max rank directly to label
+    severity_label_cases = []
+    for k, v in SEVERITY_RANKS.items():
+        severity_label_cases.append(f"WHEN MAX({severity_case_sql}) = {v} THEN '{k}'")
+    severity_label_sql = "CASE " + " ".join(severity_label_cases) + " ELSE NULL END"
+
+    confidence_label_cases = []
+    for k, v in CONFIDENCE_RANKS.items():
+        confidence_label_cases.append(
+            f"WHEN MAX({confidence_case_sql}) = {v} THEN '{k}'"
+        )
+    confidence_label_sql = "CASE " + " ".join(confidence_label_cases) + " ELSE NULL END"
+
+    # Add status filter if is_observation is True
+    status_filter = " AND c.status = 'ko'" if is_observation else ""
+
+    queryset = queryset.extra(
+        select={
+            "max_severity": f"""
+                SELECT {severity_label_sql}
+                FROM {control_table} c
+                WHERE c.control_definition_id = {control_def_table}.id{status_filter}
+            """,
+            "max_confidence": f"""
+                SELECT {confidence_label_sql}
+                FROM {control_table} c
+                WHERE c.control_definition_id = {control_def_table}.id{status_filter}
+                AND ({severity_case_sql}) = (
+                    SELECT MAX({severity_case_sql.replace('c.', 'c2.')})
+                    FROM {control_table} c2
+                    WHERE c2.control_definition_id = {control_def_table}.id{status_filter.replace('c.', 'c2.')}
+                )
+            """,
+        }
+    )
+
+    return queryset

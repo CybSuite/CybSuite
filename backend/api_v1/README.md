@@ -1,5 +1,15 @@
 # API v1 Endpoints
 
+## Control Definition with Controls (Custom Views)
+
+These endpoints provide merged schema and data for control definitions along with their associated controls.
+
+- `GET /api/v1/schema/entity/control_definition_w_controls/` – Get merged schema for control_definition_w_controls
+- `GET /api/v1/data/entity/control_definition_w_controls/` – Get merged data for control_definition_w_controls
+- `GET /api/v1/data/record/control_definition_w_controls/{pretty_id}/` – Get record detail for control_definition_w_controls by pretty_id
+- `GET /api/v1/data/related/control_definition_w_controls/{pretty_id}/` – Get related records for control_definition_w_controls by pretty_id
+- `GET /api/v1/form/options/control_definition_w_controls/{field_name}/` – Get form options for control_definition_w_controls
+
 ## Navigation Operations
 - `GET /api/v1/nav_links/` - Get navigation bar structure for the frontend
 
@@ -134,7 +144,9 @@ Flattened response:
 - `POST /api/v1/ingest/{ingestor}/` - Ingest file data
   - Payload: multipart/form-data with `file` field
 
+
 ## Report Operations
+- `GET /api/v1/report/data/{reporter_name}/` - Get raw data for a report (JSON or other format)
 - `GET /api/v1/report/{reporter}/` - Generate and download report
 
 ## Plugin Operations

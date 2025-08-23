@@ -241,6 +241,7 @@ export const api = {
         sortDesc?: boolean;
         serverSearch?: string;
         serverFilters?: string;
+        isObservation?: boolean;
       }
     ) => {
       const searchParams = new URLSearchParams();
@@ -256,24 +257,31 @@ export const api = {
       if (params?.sortBy) searchParams.set("sort_by", params.sortBy);
       if (params?.sortDesc !== undefined)
         searchParams.set("sort_desc", params.sortDesc.toString());
-      if (params?.serverSearch) searchParams.set("server_search", params.serverSearch);
-      if (params?.serverFilters) searchParams.set("server_filters", params.serverFilters);
+      if (params?.serverSearch)
+        searchParams.set("server_search", params.serverSearch);
+      if (params?.serverFilters)
+        searchParams.set("server_filters", params.serverFilters);
+      if (params?.isObservation)
+        searchParams.set("isObservation", params.isObservation.toString());
 
       const queryString = searchParams.toString();
       const endpoint = `/api/v1/data/entity/${entity}/${
         queryString ? `?${queryString}` : ""
       }`;
-      return apiClient.get<{
-        data: EntityRecord[];
-        pagination?: {
-          total: number;
-          filtered: number;
-          skip: number;
-          limit: number | null;
-          has_next: boolean;
-          has_prev: boolean;
-        };
-      } | EntityRecord[]>(endpoint);
+      return apiClient.get<
+        | {
+            data: EntityRecord[];
+            pagination?: {
+              total: number;
+              filtered: number;
+              skip: number;
+              limit: number | null;
+              has_next: boolean;
+              has_prev: boolean;
+            };
+          }
+        | EntityRecord[]
+      >(endpoint);
     },
     getEntityOptions: (
       entity: string,
@@ -308,10 +316,7 @@ export const api = {
         `/api/v1/data/record/${entity}/${id}/${params}`
       );
     },
-    getRelatedRecords: (
-      entity: string,
-      id: string | number
-    ) => {
+    getRelatedRecords: (entity: string, id: string | number) => {
       return apiClient.get<{
         relatedData: Record<string, EntityRecord[]>;
         relatedSchemas: Record<string, EntitySchema>;
@@ -403,6 +408,33 @@ export const api = {
     },
   },
 
+  // Report endpoints
+  reports: {
+    getReporters: () => apiClient.get<Array<{name: string}>>("/api/v1/plugins/reporters/"),
+    getReportData: (reporterName: string, params?: { latest_run?: number }) => {
+      const searchParams = new URLSearchParams();
+      if (params?.latest_run !== undefined)
+        searchParams.set("latest_run", params.latest_run.toString());
+
+      const queryString = searchParams.toString();
+      return apiClient.get<any>(`/api/v1/report/data/${reporterName}/${
+        queryString ? `?${queryString}` : ""
+      }`);
+    },
+    downloadReport: (reporterName: string, params?: { latest_run?: number }) => {
+      const searchParams = new URLSearchParams();
+      if (params?.latest_run !== undefined)
+        searchParams.set("latest_run", params.latest_run.toString());
+
+      const queryString = searchParams.toString();
+
+      // Return the download URL instead of making the request here
+      return `${API_BASE_URL}/api/v1/report/${reporterName}/${
+        queryString ? `?${queryString}` : ""
+      }`;
+    },
+  },
+
   // Legacy endpoints (backward compatibility)
   legacy: {
     healthCheck: () => {
@@ -468,11 +500,14 @@ export const serverApi = {
     getEntitySchema: (
       entity: string,
       cookies?: string,
-      flattenDict = false
+      flattenDict?: boolean,
+      isObservation?: boolean,
     ) => {
-      const params = flattenDict ? "?flatten_dict=true" : "";
+      const params = new URLSearchParams();
+      if (flattenDict) params.set("flatten_dict", "true");
+      if (isObservation) params.set("isObservation", "true");
       return createServerApiClient(cookies).get<EntitySchema>(
-        `/api/v1/schema/entity/${entity}/${params}`
+        `/api/v1/schema/entity/${entity}/${params.toString ? `?${params.toString()}` : ""}`
       );
     },
     getEntityFieldNames: (entity: string, cookies?: string) =>
@@ -511,6 +546,7 @@ export const serverApi = {
         search?: string;
         filters?: string;
         flattenDict?: boolean;
+        isObservation?: boolean;
       },
       cookies?: string
     ) => {
@@ -522,22 +558,26 @@ export const serverApi = {
       if (params?.search) searchParams.set("search", params.search);
       if (params?.filters) searchParams.set("filters", params.filters);
       if (params?.flattenDict) searchParams.set("flatten_dict", "true");
+      if (params?.isObservation) searchParams.set("isObservation", "true");
 
       const queryString = searchParams.toString();
       const endpoint = `/api/v1/data/entity/${entity}/${
         queryString ? `?${queryString}` : ""
       }`;
-      return createServerApiClient(cookies).get<{
-        data: EntityRecord[];
-        pagination?: {
-          total: number;
-          filtered: number;
-          skip: number;
-          limit: number | null;
-          has_next: boolean;
-          has_prev: boolean;
-        };
-      } | EntityRecord[]>(endpoint);
+      return createServerApiClient(cookies).get<
+        | {
+            data: EntityRecord[];
+            pagination?: {
+              total: number;
+              filtered: number;
+              skip: number;
+              limit: number | null;
+              has_next: boolean;
+              has_prev: boolean;
+            };
+          }
+        | EntityRecord[]
+      >(endpoint);
     },
     getEntityOptions: (
       entity: string,
@@ -572,22 +612,37 @@ export const serverApi = {
       entity: string,
       id: string | number,
       cookies?: string,
-      flattenDict = false
+      flattenDict = false,
+      isObservation?: boolean
     ) => {
-      const params = flattenDict ? "?flatten_dict=true" : "";
+      const params = new URLSearchParams();
+      if (flattenDict) params.set("flatten_dict", "true");
+      if (isObservation) params.set("isObservation", "true");
+
       return createServerApiClient(cookies).get<EntityRecord>(
-        `/api/v1/data/record/${entity}/${id}/${params}`
+        `/api/v1/data/record/${entity}/${id}/${
+          params.toString() ? `?${params.toString()}` : ""
+        }`
       );
     },
     getRelatedRecords: (
       entity: string,
       id: string | number,
-      cookies?: string
+      cookies?: string,
+      flatten_dict?: boolean,
+      isObservation?: boolean
     ) => {
+      const params = new URLSearchParams();
+      if (flatten_dict) params.set("flatten_dict", "true");
+      if (isObservation) params.set("isObservation", "true");
+
       return createServerApiClient(cookies).get<{
         relatedData: Record<string, EntityRecord[]>;
         relatedSchemas: Record<string, EntitySchema>;
-      }>(`/api/v1/data/related/${entity}/${id}/`);
+      }>(
+        `/api/v1/data/related/${entity}/${id}/` +
+          (params.toString() ? `?${params.toString()}` : "")
+      );
     },
     createRecord: (
       entity: string,
@@ -695,6 +750,34 @@ export const serverApi = {
           data
         );
       },
+    },
+  },
+
+  // Report endpoints
+  reports: {
+    getReporters: (cookies?: string) =>
+      createServerApiClient(cookies).get<Array<{name: string}>>("/api/v1/plugins/reporters/"),
+    getReportData: (reporterName: string, params?: { latest_run?: number }, cookies?: string) => {
+      const searchParams = new URLSearchParams();
+      if (params?.latest_run !== undefined)
+        searchParams.set("latest_run", params.latest_run.toString());
+
+      const queryString = searchParams.toString();
+      return createServerApiClient(cookies).get<any>(`/api/v1/report/data/${reporterName}/${
+        queryString ? `?${queryString}` : ""
+      }`);
+    },
+    getDownloadUrl: (reporterName: string, params?: { latest_run?: number }) => {
+      const searchParams = new URLSearchParams();
+      if (params?.latest_run !== undefined)
+        searchParams.set("latest_run", params.latest_run.toString());
+
+      const queryString = searchParams.toString();
+      const serverUrl = process.env.DJANGO_API_URL || "http://backend:8000";
+
+      return `${serverUrl}/api/v1/report/${reporterName}/${
+        queryString ? `?${queryString}` : ""
+      }`;
     },
   },
 };

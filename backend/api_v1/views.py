@@ -9,7 +9,7 @@ from typing import Dict
 from django.apps import apps
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.http import FileResponse
 from rest_framework import status
 from rest_framework.decorators import api_view
@@ -24,7 +24,10 @@ from .pretty_id_utils import (
 from .serializers import serialize_model
 from .utils import (
     apply_dict_flattening,
+    filter_data_table_queryset,
     format_validation_error,
+    get_data_table_params,
+    get_empty_field_description,
     get_flattened_columns_from_sample_data,
     map_koalak_type_to_form_type,
 )
@@ -117,8 +120,9 @@ def get_entity_schema(request, entity):
 
                 if dict_field_names:
                     # Get flattened columns from sample data
+                    sample = db.request(entity)[:100]
                     flattened_columns = get_flattened_columns_from_sample_data(
-                        entity, db, dict_field_names
+                        sample, dict_field_names
                     )
 
                     # The fields structure is a dictionary, not a list
@@ -146,7 +150,9 @@ def get_entity_schema(request, entity):
                             # This is a dict field - add its flattened columns here instead
                             for flat_column, flat_type in flattened_columns.items():
                                 if flat_column.startswith(f"{field_name}."):
-                                    display_name = flat_column.replace(".", " ").title()
+                                    display_name = flat_column.replace(
+                                        f"{field_name}.", ""
+                                    ).title()
 
                                     # Convert inferred type to proper Python class annotation
                                     if flat_type == "dict":
@@ -166,28 +172,15 @@ def get_entity_schema(request, entity):
                                     else:
                                         annotation = "<class 'str'>"  # fallback
 
-                                    new_fields_dict[flat_column] = {
-                                        "name": flat_column,
-                                        "pretty_name": display_name,
-                                        "plural_name": display_name + "s",
-                                        "display_name": display_name,
-                                        "dest": None,
-                                        "default": "NOTHING",
-                                        "choices": None,
-                                        "annotation": annotation,
-                                        "description": f"Flattened field from {flat_column.split('.')[0]}",
-                                        "examples": None,
-                                        "element_examples": None,
-                                        "indexed": False,
-                                        "unique": False,
-                                        "nullable": True,
-                                        "hidden_in_list": False,
-                                        "hidden_in_detail": False,
-                                        "in_filter_query": True,
-                                        "is_linked_by_related_name": False,
-                                        "entity": entity,
-                                        "referenced_entity": None,
-                                    }
+                                    new_fields_dict[
+                                        flat_column
+                                    ] = get_empty_field_description(
+                                        entity=entity,
+                                        name=flat_column,
+                                        display_name=display_name,
+                                        annotation=annotation,
+                                        description=f"Flattened field from {flat_column.split('.')[0]}",
+                                    )
 
                     fields_dict = new_fields_dict
                     entity_data["fields"] = fields_dict
@@ -262,26 +255,18 @@ def get_entity_data(request, entity):
 
     try:
         # Get query parameters
-        skip = int(request.GET.get("skip", 0))
-        limit = request.GET.get("limit")
-        search = request.GET.get("search")
-        filters = request.GET.get("filters")
-
-        # Server-side table management parameters
-        sort_by = request.GET.get("sort_by")  # field name to sort by
-        sort_desc = (
-            request.GET.get("sort_desc", "false").lower() == "true"
-        )  # sort direction
-        server_search = request.GET.get("server_search")  # server-side search query
-        server_filters = request.GET.get(
-            "server_filters"
-        )  # JSON string of server-side filters
-
-        if limit:
-            limit = int(limit)
-
-        # Check if dict flattening is requested
-        flatten_dict_param = request.GET.get("flatten_dict", "false").lower() == "true"
+        table_params = get_data_table_params(request)
+        (
+            skip,
+            limit,
+            search,
+            filters,
+            sort_by,
+            sort_desc,
+            server_search,
+            server_filters,
+            flatten_dict_param,
+        ) = table_params
 
         # Identify dict fields for flattening only if requested
         entity_desc = cyberdb_schema[entity]
@@ -296,210 +281,12 @@ def get_entity_data(request, entity):
 
         # Get total count before applying filters (for pagination metadata)
         total_count = queryset.count()
-
-        # Apply server-side search if provided
-        if server_search:
-            # Get all fields from the model
-            model_fields = queryset.model._meta.fields
-
-            # Create a Q object for each field to search in
-            search_q_objects = []
-            for field in model_fields:
-                # Search in text and number fields, but skip dict fields since they'll be flattened
-                if (
-                    field.get_internal_type()
-                    in [
-                        "CharField",
-                        "TextField",
-                        "IntegerField",
-                        "FloatField",
-                        "DecimalField",
-                    ]
-                    and field.name not in dict_field_names
-                ):
-                    search_q_objects.append(
-                        Q(**{f"{field.name}__icontains": server_search})
-                    )
-
-            # Combine all Q objects with OR operator
-            if search_q_objects:
-                queryset = queryset.filter(reduce(operator.or_, search_q_objects))
-
-        # Apply server-side filters if provided
-        if server_filters:
-            try:
-                filter_data = json.loads(server_filters)
-                advanced_filters = filter_data.get("advancedFilters", [])
-                global_logic = filter_data.get("globalLogic", "and")
-
-                filter_q_objects = []
-
-                for filter_item in advanced_filters:
-                    column = filter_item.get("column")
-                    filter_operator = filter_item.get("operator")
-                    value = filter_item.get("value")
-
-                    if not column or not filter_operator:
-                        continue
-
-                    # Skip flattened field filters (handle post-processing)
-                    if "." in column and any(
-                        column.startswith(f"{df}.") for df in dict_field_names
-                    ):
-                        continue
-
-                    # Build Django ORM filter based on operator
-                    if filter_operator == "contains":
-                        filter_q_objects.append(Q(**{f"{column}__icontains": value}))
-                    elif filter_operator == "does_not_contain":
-                        filter_q_objects.append(~Q(**{f"{column}__icontains": value}))
-                    elif filter_operator == "is":
-                        filter_q_objects.append(Q(**{f"{column}__iexact": value}))
-                    elif filter_operator == "is_not":
-                        filter_q_objects.append(~Q(**{f"{column}__iexact": value}))
-                    elif filter_operator == "is_empty":
-                        filter_q_objects.append(
-                            Q(**{f"{column}__isnull": True})
-                            | Q(**{f"{column}__exact": ""})
-                        )
-                    elif filter_operator == "is_not_empty":
-                        filter_q_objects.append(
-                            ~Q(**{f"{column}__isnull": True})
-                            & ~Q(**{f"{column}__exact": ""})
-                        )
-                    elif filter_operator == "equals":
-                        if value is not None:
-                            filter_q_objects.append(Q(**{f"{column}__exact": value}))
-                    elif filter_operator == "not_equals":
-                        if value is not None:
-                            filter_q_objects.append(~Q(**{f"{column}__exact": value}))
-                    elif filter_operator == "greater_than":
-                        if value is not None:
-                            filter_q_objects.append(Q(**{f"{column}__gt": value}))
-                    elif filter_operator == "less_than":
-                        if value is not None:
-                            filter_q_objects.append(Q(**{f"{column}__lt": value}))
-                    elif filter_operator == "greater_equal":
-                        if value is not None:
-                            filter_q_objects.append(Q(**{f"{column}__gte": value}))
-                    elif filter_operator == "less_equal":
-                        if value is not None:
-                            filter_q_objects.append(Q(**{f"{column}__lte": value}))
-                    elif filter_operator == "has_any_of":
-                        if isinstance(value, list) and value:
-                            filter_q_objects.append(Q(**{f"{column}__in": value}))
-                    elif filter_operator == "has_none_of":
-                        if isinstance(value, list) and value:
-                            filter_q_objects.append(~Q(**{f"{column}__in": value}))
-                    elif filter_operator == "is_on":
-                        if value:
-                            filter_q_objects.append(Q(**{f"{column}__date": value}))
-                    elif filter_operator == "is_before":
-                        if value:
-                            filter_q_objects.append(Q(**{f"{column}__lt": value}))
-                    elif filter_operator == "is_after":
-                        if value:
-                            filter_q_objects.append(Q(**{f"{column}__gt": value}))
-                    elif filter_operator == "is_between":
-                        if (
-                            isinstance(value, dict)
-                            and value.get("start")
-                            and value.get("end")
-                        ):
-                            filter_q_objects.append(
-                                Q(
-                                    **{
-                                        f"{column}__range": [
-                                            value["start"],
-                                            value["end"],
-                                        ]
-                                    }
-                                )
-                            )
-
-                # Apply filters with global logic
-                if filter_q_objects:
-                    if global_logic == "and":
-                        for q_obj in filter_q_objects:
-                            queryset = queryset.filter(q_obj)
-                    else:  # 'or'
-                        queryset = queryset.filter(
-                            reduce(operator.or_, filter_q_objects)
-                        )
-
-            except json.JSONDecodeError:
-                return Response(
-                    {"error": "Invalid server_filters format"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-        # Apply server-side sorting if provided
-        if sort_by:
-            # Check if sorting a flattened field (handle post-processing)
-            is_flattened_sort = "." in sort_by and any(
-                sort_by.startswith(f"{df}.") for df in dict_field_names
-            )
-
-            if not is_flattened_sort:
-                order_field = f"-{sort_by}" if sort_desc else sort_by
-                try:
-                    queryset = queryset.order_by(order_field)
-                except Exception:
-                    # If sorting fails, continue without sorting
-                    pass
-
-        # Get filtered count after applying search and filters
-        filtered_count = queryset.count()
-
-        # Apply column filters if provided (legacy support)
-        if filters:
-            try:
-                filter_dict = json.loads(filters)
-                for field, value in filter_dict.items():
-                    if value:  # Only apply non-empty filters
-                        # Handle flattened field filters (e.g., "details.hello")
-                        if "." in field and any(
-                            field.startswith(f"{df}.") for df in dict_field_names
-                        ):
-                            # This is a flattened field filter - we'll need to apply it after serialization
-                            # For now, skip database-level filtering for flattened fields
-                            continue
-                        else:
-                            queryset = queryset.filter(**{f"{field}__icontains": value})
-            except json.JSONDecodeError:
-                return Response(
-                    {"error": "Invalid filters format"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-        # Apply legacy global search if provided (and no server_search)
-        if search and not server_search:
-            # Get all fields from the model
-            model_fields = queryset.model._meta.fields
-
-            # Create a Q object for each field to search in
-            q_objects = []
-            for field in model_fields:
-                # Only search in text and number fields, but skip dict fields since they'll be flattened
-                if (
-                    field.get_internal_type()
-                    in [
-                        "CharField",
-                        "TextField",
-                        "IntegerField",
-                        "FloatField",
-                        "DecimalField",
-                    ]
-                    and field.name not in dict_field_names
-                ):
-                    q_objects.append(Q(**{f"{field.name}__icontains": search}))
-
-            # Combine all Q objects with OR operator
-            if q_objects:
-                queryset = queryset.filter(reduce(operator.or_, q_objects))
+        (queryset, filtered_count, _, _) = filter_data_table_queryset(
+            queryset, table_params, dict_field_names
+        )
 
         # Apply skip and limit using Django slicing
-        if limit:
+        if limit > 0:
             queryset = queryset[skip : skip + limit]
         else:
             queryset = queryset[skip:]
@@ -785,6 +572,17 @@ def get_record_detail(request, entity, pretty_id):
                 },
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        # For observation_definition, filter controls by status="ko"
+        if entity == "control_definition":
+            is_observation = request.GET.get("isObservation", "false").lower() == "true"
+            if is_observation and entity == "control_definition":
+                obj = obj.__class__.objects.prefetch_related(
+                    Prefetch(
+                        "controls",
+                        queryset=obj.controls.model.objects.filter(status="ko"),
+                    )
+                ).get(pk=obj.pk)
 
         # Serialize and return the object
         serialized = serialize_model(cyberdb_schema, obj, entity)
@@ -1538,6 +1336,62 @@ def ingest_data(request, ingestor_name):
 
 # Report Operations Endpoints
 @api_view(["GET"])
+def get_reporter_data(request, reporter_name):
+    """Get report data as JSON from the specified reporter"""
+    db = CyberDB.from_default_config()
+    if db is None or pm_reporters is None:
+        return Response(
+            {"error": "Database or reporters not available"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    try:
+        # Check if reporter exists
+        if reporter_name not in [plugin.name for plugin in pm_reporters]:
+            return Response(
+                {"error": f"Reporter '{reporter_name}' not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Get the reporter plugin
+        reporter = pm_reporters[reporter_name](db)
+
+        # Check if reporter supports JSON data extraction
+        if not hasattr(reporter, "do_processing"):
+            return Response(
+                {
+                    "error": f"Reporter '{reporter_name}' does not support data extraction"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Get query parameters for filtering
+        latest_run = request.GET.get("latest_run")
+        if latest_run:
+            try:
+                latest_run = int(latest_run)
+                reporter.configure(latest_run=latest_run)
+            except ValueError:
+                return Response(
+                    {"error": "Invalid latest_run parameter - must be an integer"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            reporter.configure()
+
+        # Generate the report data
+        report_data = reporter.do_processing()
+
+        return Response(report_data)
+
+    except Exception as e:
+        return Response(
+            {"error": f"Error generating report data: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["GET"])
 def generate_report(request, reporter_name):
     """Generate a report using the specified reporter and return it as a downloadable file"""
     db = CyberDB.from_default_config()
@@ -1562,13 +1416,36 @@ def generate_report(request, reporter_name):
         ) as tmp_file:
             temp_path = tmp_file.name
 
+        # Configure the reporter if needed
+        latest_run = request.GET.get("latest_run")
+        if latest_run:
+            try:
+                latest_run = int(latest_run)
+                reporter.configure(latest_run=latest_run)
+            except ValueError:
+                return Response(
+                    {"error": "Invalid latest_run parameter - must be an integer"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            reporter.configure()
+
         # Generate the report
         reporter.run(temp_path)
 
-        # Determine content type
-        content_type = (
-            "text/html" if reporter.extension == ".html" else "application/json"
-        )
+        # Determine content type based on file extension
+        if reporter.extension == ".html":
+            content_type = "text/html"
+        elif reporter.extension == ".json":
+            content_type = "application/json"
+        elif reporter.extension == ".xlsx":
+            content_type = (
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        elif reporter.extension == ".csv":
+            content_type = "text/csv"
+        else:
+            content_type = "application/octet-stream"
 
         # Return the file as a downloadable response
         response = FileResponse(
@@ -1935,6 +1812,9 @@ def get_related_records(request, entity, pretty_id):
         )
 
     try:
+        # Check if dict flattening is requested
+        flatten_dict_param = request.GET.get("flatten_dict", "false").lower() == "true"
+
         # First, get the main record using the same logic as get_record_detail
         obj = None
 
@@ -1992,6 +1872,7 @@ def get_related_records(request, entity, pretty_id):
         entity_desc = cyberdb_schema[entity]
         related_data = {}
         related_schemas = {}
+        related_dict_fields = {}  # Track dict fields for each related entity
 
         # First, initialize all possible related entities (even with empty arrays)
         for field_desc in entity_desc:
@@ -2011,6 +1892,21 @@ def get_related_records(request, entity, pretty_id):
                 related_schemas[
                     referenced_entity_name
                 ] = referenced_entity_name  # Just store entity name for now
+
+                # If flattening is requested, identify dict fields for this related entity
+                if flatten_dict_param:
+                    try:
+                        related_entity_desc = cyberdb_schema[referenced_entity_name]
+                        dict_field_names = []
+                        for related_field_desc in related_entity_desc:
+                            if (
+                                related_field_desc.annotation is dict
+                                or related_field_desc.annotation is Dict
+                            ):
+                                dict_field_names.append(related_field_desc.name)
+                        related_dict_fields[referenced_entity_name] = dict_field_names
+                    except KeyError:
+                        related_dict_fields[referenced_entity_name] = []
 
         # Now find all relation fields and populate actual data
         for field_desc in entity_desc:
@@ -2081,9 +1977,17 @@ def get_related_records(request, entity, pretty_id):
                     r.get("id") == serialized_related.get("id")
                     for r in related_data[referenced_entity_name]
                 ):
-                    related_data[referenced_entity_name].append(
-                        serialized_related
-                    )  # Convert schemas to the format expected by frontend
+                    related_data[referenced_entity_name].append(serialized_related)
+
+        # Apply dict flattening to related data if requested
+        if flatten_dict_param:
+            for entity_name, records in related_data.items():
+                dict_field_names = related_dict_fields.get(entity_name, [])
+                if dict_field_names and records:
+                    flattened_records = apply_dict_flattening(records, dict_field_names)
+                    related_data[entity_name] = flattened_records
+
+        # Convert schemas to the format expected by frontend
         formatted_schemas = {}
         for entity_name in related_schemas.keys():
             # Get schema for related entity, filtering out reverse relations
@@ -2117,6 +2021,59 @@ def get_related_records(request, entity, pretty_id):
                         else str(field_desc.referenced_entity)
                     )
 
+                # Check if this is a dict field and flattening is requested
+                is_dict_field = (
+                    field_desc.annotation is dict or field_desc.annotation is Dict
+                )
+                if flatten_dict_param and is_dict_field:
+                    # Skip the original dict field and add flattened fields instead
+                    dict_field_names = related_dict_fields.get(entity_name, [])
+                    if field_desc.name in dict_field_names:
+                        # Get flattened columns for this dict field
+                        flattened_columns = get_flattened_columns_from_sample_data(
+                            related_data[entity_name], [field_desc.name]
+                        )
+
+                        # Add flattened fields to schema
+                        for flat_column, flat_type in flattened_columns.items():
+                            if flat_column.startswith(f"{field_desc.name}."):
+                                display_name = flat_column.replace(
+                                    f"{field_desc.name}.", ""
+                                ).title()
+
+                                # Convert inferred type to proper Python class annotation
+                                if flat_type == "dict":
+                                    annotation = "typing.Dict"
+                                elif flat_type == "list":
+                                    annotation = "typing.List"
+                                elif flat_type == "boolean":
+                                    annotation = "<class 'bool'>"
+                                elif flat_type == "integer":
+                                    annotation = "<class 'int'>"
+                                elif flat_type == "number":
+                                    annotation = "<class 'float'>"
+                                elif flat_type == "string":
+                                    annotation = "<class 'str'>"
+                                elif flat_type == "null":
+                                    annotation = "<class 'NoneType'>"
+                                else:
+                                    annotation = "<class 'str'>"  # fallback
+
+                                formatted_fields[flat_column] = {
+                                    "name": flat_column,
+                                    "annotation": annotation,
+                                    "referenced_entity": None,
+                                    "is_linked_by_related_name": False,
+                                    "choices": None,
+                                    "nullable": True,
+                                    "not_editable": True,
+                                    "hidden_in_list": False,
+                                    "pretty_name": None,
+                                    "display_name": display_name,
+                                    "description": f"Flattened field from {flat_column.split('.')[0]}",
+                                }
+                        continue  # Skip adding the original dict field
+
                 formatted_fields[field_desc.name] = {
                     "name": field_desc.name,
                     "annotation": str(field_desc.annotation),
@@ -2125,6 +2082,7 @@ def get_related_records(request, entity, pretty_id):
                         field_desc, "is_linked_by_related_name", False
                     ),
                     "choices": getattr(field_desc, "choices", None),
+                    "nullable": getattr(field_desc, "nullable", False),
                     "hidden_in_list": getattr(field_desc, "hidden_in_list", False),
                     "pretty_name": getattr(field_desc, "pretty_name", None),
                     "display_name": getattr(field_desc, "display_name", None),

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import control_views, views
 
 app_name = "api_v1"
 
@@ -9,6 +9,32 @@ urlpatterns = [
     path(
         "nav_links/", views.get_navbar, name="nav_links"
     ),  # Frontend expects this endpoint
+    # Control definition related endpoints
+    path(
+        "schema/entity/control_definition_w_controls/",
+        control_views.get_control_definition_w_controls_schema,
+        name="control_definition_schema",
+    ),
+    path(
+        "data/entity/control_definition_w_controls/",
+        control_views.get_control_definition_w_controls_data,
+        name="control_definition_data",
+    ),
+    path(
+        "data/record/control_definition_w_controls/<str:pretty_id>/",
+        control_views.get_control_definition_record_detail,
+        name="control_definition_data",
+    ),
+    path(
+        "data/related/control_definition_w_controls/<str:pretty_id>/",
+        control_views.get_control_definition_related_records,
+        name="control_definition_related",
+    ),
+    path(
+        "form/options/control_definition_w_controls/<str:field_name>/",
+        control_views.get_control_definition_form_options,
+        name="control_definition_form_options",
+    ),
     # Schema endpoints
     path("schema/full/", views.get_full_schema, name="schema_full"),
     path("schema/names/", views.get_schema_names, name="schema_names"),
@@ -60,6 +86,11 @@ urlpatterns = [
     path("ingest/plugins/", views.list_ingestors, name="list_ingestors"),
     path("ingest/<str:ingestor_name>/", views.ingest_data, name="ingest_data"),
     # Report endpoints
+    path(
+        "report/data/<str:reporter_name>/",
+        views.get_reporter_data,
+        name="get_reporter_data",
+    ),
     path("report/<str:reporter_name>/", views.generate_report, name="generate_report"),
     # Plugin endpoints
     path("plugins/reporters/", views.get_reporters, name="get_reporters"),

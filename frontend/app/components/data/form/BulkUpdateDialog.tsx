@@ -26,6 +26,7 @@ interface BulkUpdateDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	onSuccess?: (updatedCount: number) => void;
+	customFieldOptionsEntityName?: string;
 }
 
 export function BulkUpdateDialog({
@@ -36,7 +37,8 @@ export function BulkUpdateDialog({
 	fieldOptions = {},
 	open,
 	onOpenChange,
-	onSuccess
+	onSuccess,
+	customFieldOptionsEntityName
 }: BulkUpdateDialogProps) {
 	const [submitting, setSubmitting] = React.useState(false);
 	const [generalError, setGeneralError] = React.useState<string>('');
@@ -116,7 +118,7 @@ export function BulkUpdateDialog({
 			// Load options for enum fields
 			const optionsPromises = enumFieldsNeedingOptions.map(async (field) => {
 				try {
-					const optionsResponse = await api.form.getFieldOptions(entity, field.name);
+					const optionsResponse = await api.form.getFieldOptions(customFieldOptionsEntityName || entity, field.name);
 					if (optionsResponse.error) {
 						console.error(`Failed to load options for enum field ${field.name}:`, optionsResponse.error);
 						return { fieldName: field.name, options: [] };

@@ -61,6 +61,9 @@ function NestedEntityForm({ entity, onSuccess, onCancel }: NestedEntityFormProps
 			});
 			setFieldOptions(schemaOptions);
 
+			// Load options for relation and enum fields that don't have options
+			await loadFieldOptions(schema);
+
 			// Set default values
 			const defaultValues = schema.fields.reduce((acc: any, field: FormFieldConfig) => {
 				if (field.default !== undefined && field.default !== null && field.default !== "NOTHING") {
@@ -79,6 +82,60 @@ function NestedEntityForm({ entity, onSuccess, onCancel }: NestedEntityFormProps
 		} finally {
 			setLoading(false);
 		}
+	};
+
+	const loadFieldOptions = async (schema: FormSchema) => {
+		// Find fields that need options loaded
+		const fieldsNeedingOptions = schema.fields.filter(
+			(field: FormFieldConfig) =>
+				(field.type === 'relation' || field.type === 'enum' || field.relation_entity) &&
+				!field.options &&
+				!fieldOptions[field.name] // Don't reload if we already have options
+		);
+
+		if (fieldsNeedingOptions.length === 0) {
+			return; // All options are already available
+		}
+
+		const optionsPromises = fieldsNeedingOptions.map(async (field: FormFieldConfig) => {
+			try {
+				let optionsResponse;
+
+				// For relation fields, use the data options endpoint with the related entity
+				if (field.type === 'relation' && field.relation_entity) {
+					optionsResponse = await api.data.getEntityOptions(field.relation_entity);
+					if (optionsResponse.error || !optionsResponse.data) {
+						console.error(`Failed to load options for relation field ${field.name}:`, optionsResponse.error);
+						return { fieldName: field.name, options: [] };
+					}
+					// Convert the response format from {id, repr} to {value, label}
+					const options = optionsResponse.data.map((item: any) => ({
+						value: item.id,
+						label: item.repr
+					}));
+					return { fieldName: field.name, options };
+				} else {
+					// For enum fields, use the form options endpoint
+					optionsResponse = await api.form.getFieldOptions(entity, field.name);
+					if (optionsResponse.error) {
+						console.error(`Failed to load options for field ${field.name}:`, optionsResponse.error);
+						return { fieldName: field.name, options: [] };
+					}
+					return { fieldName: field.name, options: optionsResponse.data.options };
+				}
+			} catch (error) {
+				console.error(`Failed to load options for field ${field.name}:`, error);
+				return { fieldName: field.name, options: [] };
+			}
+		});
+
+		const optionsResults = await Promise.all(optionsPromises);
+		const optionsMap = optionsResults.reduce((acc, result) => {
+			acc[result.fieldName] = result.options;
+			return acc;
+		}, {} as Record<string, FormFieldOption[]>);
+
+		setFieldOptions(prev => ({ ...prev, ...optionsMap }));
 	};
 
 	// Helper function to check if the entity has dict fields
@@ -898,14 +955,14 @@ export function EntityFormDialog({
 					<DialogTrigger asChild>
 						<Button variant="default" size="lg">
 							{mode === 'edit' ? <Edit className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-							{triggerLabel || (mode === 'edit' ? `Edit ${entity}` : `Add ${entity}`)}
+							{triggerLabel || (mode === 'edit' ? `Edit ${entity}` : `Add ${entity.toLowerCase().split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}`)}
 						</Button>
 					</DialogTrigger>
 				)}
 				<DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
 					<DialogHeader>
 						<DialogTitle>
-							{mode === 'edit' ? `Edit ${entity}` : `Add New ${entity}`}
+							{mode === 'edit' ? `Edit ${entity}` : `Add New ${entity.toLowerCase().split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}`}
 						</DialogTitle>
 						<DialogDescription>
 							{mode === 'edit'
