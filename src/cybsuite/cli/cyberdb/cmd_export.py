@@ -1,8 +1,8 @@
-import os
 from pathlib import Path
 
 from cybsuite.cyberdb import CyberDB
 from koalak.subcommand_parser import SubcommandParser
+
 from .utils_cmd import CMD_GROUP_UTILS
 
 
