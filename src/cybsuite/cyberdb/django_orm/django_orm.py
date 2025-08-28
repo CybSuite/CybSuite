@@ -338,6 +338,15 @@ class DjangoORMDatabase(AbstractDatabase):
 
         return objects.filter(**attributes).count()
 
+    def is_empty(self, _model_name: str, **attributes) -> bool:
+        """Check if a model has any entries matching the given criteria"""
+        try:
+            objects = self.django_objects[_model_name]
+        except:
+            raise ValueError(f"No model found with the name '{_model_name}'")
+
+        return not objects.filter(**attributes).exists()
+
     def delete_one(self, _model_name: str, **attributes) -> bool:
         """Delete a single entry from the database that matches the given criteria.
 

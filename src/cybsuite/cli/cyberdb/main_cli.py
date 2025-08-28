@@ -9,6 +9,7 @@ from rich.console import Console
 
 from .cmd_cleardb import add_cli_cleardb
 from .cmd_clearmodel import add_cli_clearmodel
+from .cmd_export import add_cli_export
 from .cmd_ingest import add_cli_ingest
 from .cmd_makemigrations import add_cli_makemigrations
 from .cmd_migrate import add_cli_migrate
@@ -81,6 +82,7 @@ def build_command(main_command: SubcommandParser = None):
     # Group utils
     add_cli_stats(main_cli)
     add_cli_search(main_cli)
+    add_cli_export(main_cli)
 
     # Other
     add_cli_schema(main_cli)

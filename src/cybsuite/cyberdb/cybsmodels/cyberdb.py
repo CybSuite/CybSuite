@@ -219,3 +219,50 @@ class CyberDB(BaseCyberDB):
                     f"Error ingesting file {filepath} with {toolname} ingestor: {type(e).__name__} - {str(e)}"
                 )
                 raise e
+
+    def export_all_tables(self, output_dir: Union[str, Path], force: bool = False):
+        """Export all tables data to JSONL files in the specified directory"""
+        # TODO: debug it!
+        # TODO: remove None fields (but check it is not required)
+        output_dir = Path(output_dir)
+
+        # Check if output directory already exists
+        if output_dir.exists():
+            if force:
+                import shutil
+
+                shutil.rmtree(output_dir)
+                logger.info(f"Removed existing directory: {output_dir}")
+            else:
+                raise FileExistsError(
+                    f"Output directory '{output_dir}' already exists. Please choose a different directory to avoid overwriting existing data or use --force to remove it."
+                )
+
+        # Create output directory
+        output_dir.mkdir(parents=True, exist_ok=False)
+
+        exported_count = 0
+        empty_count = 0
+
+        for entity in cyberdb_schema:
+            table_name = entity.name
+            output_file = output_dir / f"{table_name}.jsonl"
+
+            if self.is_empty(table_name):
+                empty_count += 1
+                continue
+
+            try:
+                # Write data to file using output parameter
+                self.request(table_name, format="jsonl", output=str(output_file))
+                logger.info(f"Exported {table_name} to {output_file}")
+                exported_count += 1
+            except Exception as e:
+                logger.error(
+                    f"Error exporting table {table_name}: {type(e).__name__} - {str(e)}"
+                )
+                continue
+
+        logger.info(
+            f"Export completed: {exported_count} tables exported, {empty_count} empty tables skipped"
+        )
