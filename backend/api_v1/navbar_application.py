@@ -596,6 +596,15 @@ nav_app_pentest_internal.add(
 )
 
 nav_app_pentest_internal.add(
+    nav_menu_item=NavMenuItem(
+        "Controls",
+        droplist_items=[
+            NavMenuDropListItem("Controls", view="controls:"),
+        ],
+    ),
+)
+
+nav_app_pentest_internal.add(
     name="Explore",
     droplist_items=[
         NavMenuDropListItem("Hosts", view="data:list/host"),

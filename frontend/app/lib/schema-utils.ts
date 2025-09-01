@@ -64,6 +64,16 @@ export function parseFieldAnnotation(field: FieldSchema): ColumnTypeInfo {
     };
   }
 
+  // Check for typing.List annotation (generic list without specific type)
+  if (annotation === "typing.List") {
+    return {
+      variant: "text",
+      isArray: true,
+      isRelation: false,
+      baseType: "string",
+    };
+  }
+
   // Check for single entity relations
   const entityMatch = annotation.match(/Entity\((.+)\)/);
   if (entityMatch) {
@@ -155,6 +165,10 @@ export function getFieldDisplayName(field: FieldSchema): string {
 export function isBulkUpdatable(field: FieldSchema): boolean {
   // Skip read-only fields
   if (field.name === "id" || field.name === "pretty_id") {
+    return false;
+  }
+
+  if (field.not_editable) {
     return false;
   }
 

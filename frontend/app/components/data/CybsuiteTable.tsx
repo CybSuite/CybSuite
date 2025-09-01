@@ -598,7 +598,7 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
                                     <ContextMenuTrigger asChild>
                                         <TableRow
                                             data-state={row.getIsSelected() && "selected"}
-                                            className="cursor-context-menu"
+                                            className="cursor-context-menu hover:bg-muted/100 transition-colors"
                                             onDoubleClick={() => onRowAction?.("view", [row.original])}
                                         >
                                             {row.getVisibleCells().map((cell) => (

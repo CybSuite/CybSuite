@@ -108,6 +108,20 @@ class ExcelReporter(BaseReporter):
                     row[key] = str(control["details"].get(key, ""))
                 data.append(row)
 
-            sheet_name = f"{i}_{control_definition['name']}".replace(":", "_").lower()
+            # Sanitize sheet name: remove/replace invalid characters and limit length
+            raw_name = control_definition["name"]
+            # Replace problematic characters
+            sanitized_name = (
+                raw_name.replace(":", "_")
+                .replace(" ", "_")
+                .replace("/", "_")
+                .replace("\\", "_")
+                .replace("?", "_")
+                .replace("*", "_")
+                .replace("[", "_")
+                .replace("]", "_")
+            )
+            # Excel sheet names are limited to 31 characters
+            sheet_name = f"{i}_{sanitized_name}".lower()[:31]
             excel = data_to_excel(data, sheet_name=sheet_name, workbook=excel)
         excel.save(filepath_output)

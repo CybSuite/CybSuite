@@ -425,7 +425,7 @@ export default function DetailPageView({ schema, record, model, relatedData, rel
             <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                     <Link href={`/data/${model}`}>
-                        <Button variant="ghost" size="lg">
+                        <Button variant="ghost" size="lg" className="cursor-pointer">
                             <ArrowLeft className="h-8 w-8" />
                         </Button>
                     </Link>
@@ -442,7 +442,7 @@ export default function DetailPageView({ schema, record, model, relatedData, rel
                                 </TooltipContent>
                             )}
                         </Tooltip>
-                        <p className="text-sm text-gray-500">{entityDisplayName} Details</p>
+                        <p className="text-sm text-gray-500">{entityDisplayName.replace(/_/g, ' ')} Details</p>
                     </div>
                 </div>
                 <div className="flex space-x-2">
