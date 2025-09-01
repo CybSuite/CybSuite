@@ -156,6 +156,10 @@ interface ModelDataTableProps {
 	showRefreshButton?: boolean;
 	showAddButton?: boolean;
 	isServerManaged?: boolean; // If true, use server-side table management
+	isObservation?: boolean; // If true, add query param "is_observation=true" when fetching data
+	customDataFetchModelName?: string; // If provided, use this model name for data fetching (will be placed directly in the API call)
+	customViewUrlPrefix?: string; // If provided, use this URL prefix for view navigation (will be concatinated with the record id/pretty_id)
+	customFieldOptionsEntityName? :string; // If provided, use this as an entity name when fetching fields options
 }
 
 export default function ModelDataTable({
@@ -171,6 +175,10 @@ export default function ModelDataTable({
 	showRefreshButton = true,
 	showAddButton = false,
 	isServerManaged = false,
+	isObservation = false,
+	customDataFetchModelName = undefined,
+	customViewUrlPrefix = undefined,
+	customFieldOptionsEntityName = undefined,
 }: ModelDataTableProps) {
 	const router = useRouter();
 	const [data, setData] = React.useState<EntityRecord[]>(initialData);
@@ -306,7 +314,7 @@ export default function ModelDataTable({
 
 			if (isServerManaged) {
 				// Server-side mode - pass server-side parameters
-				const response = await api.data.getEntityData(model, {
+				const response = await api.data.getEntityData(customDataFetchModelName ? customDataFetchModelName : model, {
 					skip: pageIndex * pageSize,
 					limit: pageSize,
 					flattenDict: flattenDictColumn,
@@ -314,6 +322,7 @@ export default function ModelDataTable({
 					serverFilters: serverParams?.filters ? JSON.stringify(serverParams.filters) : undefined,
 					sortBy: serverParams?.sort && serverParams.sort.length > 0 ? serverParams.sort[0].id : undefined,
 					sortDesc: serverParams?.sort && serverParams.sort.length > 0 ? serverParams.sort[0].desc : false,
+					isObservation
 				});
 
 				if (response.error) {
@@ -579,7 +588,12 @@ export default function ModelDataTable({
 					const record = rows[0];
 					const identifier = getRecordIdentifier(record);
 					// Navigate to the detail page using the record identifier (pretty_id or id)
-					router.push(`/data/${model}/${identifier}`);
+					if (customViewUrlPrefix) {
+						if (customViewUrlPrefix.endsWith("/")) customViewUrlPrefix = customViewUrlPrefix.slice(0, -1);
+						router.push(`${customViewUrlPrefix}/${identifier}`);
+					} else {
+						router.push(`/data/${model}/${identifier}`);
+					}
 				}
 				break;
 			case 'edit':
@@ -962,6 +976,7 @@ export default function ModelDataTable({
 				open={bulkUpdateDialogOpen}
 				onOpenChange={setBulkUpdateDialogOpen}
 				onSuccess={handleBulkUpdateSuccess}
+				customFieldOptionsEntityName={customFieldOptionsEntityName}
 			/>
 
 			{/* Delete Confirmation Dialog */}
