@@ -483,12 +483,7 @@ def convert_django_url_to_nextjs_path(django_url: str) -> str:
 
 
 def build_menu_knowledgebase():
-    items = [
-        NavMenuDropListItem(
-            "Observations & Controls",
-            view=f"data:list/observation_template_translation",
-        )
-    ]
+    items = []
     for entity in cyberdb_schema.filter(tags="knowledgebase"):
         items.append(
             NavMenuDropListItem(
@@ -504,11 +499,9 @@ def build_menu_knowledgebase():
 
 def build_menu_reporting():
     return NavMenuItem(
-        "Reporting",
+        "Findings",
         droplist_items=[
-            NavMenuDropListItem("Observations", view="data:list/observation"),
-            NavMenuDropListItem("Controls", view="securitysuiteui:dummy"),
-            NavMenuDropListItem("Reporting", view="securitysuiteui:dummy"),
+            NavMenuDropListItem("Findings", view="controls:"),
         ],
     )
 
@@ -587,24 +580,6 @@ all_applications = [
 
 # Pentest UI #
 nav_app_pentest_internal.add(
-    nav_menu_item=NavMenuItem(
-        "Schema",
-        droplist_items=[
-            NavMenuDropListItem("Schema", view="schema:"),
-        ],
-    ),
-)
-
-nav_app_pentest_internal.add(
-    nav_menu_item=NavMenuItem(
-        "Controls",
-        droplist_items=[
-            NavMenuDropListItem("Controls", view="controls:"),
-        ],
-    ),
-)
-
-nav_app_pentest_internal.add(
     name="Explore",
     droplist_items=[
         NavMenuDropListItem("Hosts", view="data:list/host"),
@@ -626,15 +601,6 @@ nav_app_pentest_internal.add(
 )
 
 nav_app_pentest_internal.add(
-    name="Services",
-    droplist_items=[
-        NavMenuDropListItem("HTTP", view="securitysuiteui:dummy"),
-        NavMenuDropListItem("FTP", view="securitysuiteui:dummy"),
-        NavMenuDropListItem("SMB", view="securitysuiteui:dummy"),
-    ],
-)
-
-nav_app_pentest_internal.add(
     name="Features",
     droplist_items=[
         NavMenuDropListItem("Ingestors", view="features:ingestors"),
@@ -650,9 +616,17 @@ nav_app_pentest_web.add(build_menu_pentest_web())
 nav_app_configuration_review.add(build_menu_linux_review())
 
 for nav_app in all_applications:
-    nav_app.add(build_menu_missions())
+    # nav_app.add(build_menu_missions())
     nav_app.add(build_menu_reporting())
     nav_app.add(build_menu_knowledgebase())
+    nav_app.add(
+        nav_menu_item=NavMenuItem(
+            "Schema",
+            droplist_items=[
+                NavMenuDropListItem("Schema", view="schema:"),
+            ],
+        ),
+    )
 
 # SETTINGS PAGE MENU ITEM SETUP #
 settings_item = NavMenuDropListItem(
@@ -668,8 +642,8 @@ settings_item = NavMenuDropListItem(
 nav_applications = NavApplicationSet(settings_item=settings_item)
 nav_applications.add(nav_app_basic)
 nav_applications.add(nav_app_pentest_internal)
-nav_applications.add(nav_app_pentest_web)
-nav_applications.add(nav_app_pentest_extern)
+# nav_applications.add(nav_app_pentest_web)
+# nav_applications.add(nav_app_pentest_extern)
 nav_applications.add(nav_app_configuration_review)
 
 
