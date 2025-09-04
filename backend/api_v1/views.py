@@ -7,6 +7,7 @@ from functools import reduce
 from typing import Dict
 
 from django.apps import apps
+from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError
 from django.db.models import Prefetch, Q
@@ -30,17 +31,25 @@ from .utils import (
     get_empty_field_description,
     get_flattened_columns_from_sample_data,
     map_koalak_type_to_form_type,
+    run_scan_async,
 )
 
 # Import the cyberdb_schema (you may need to adjust this import path)
 try:
-    from cybsuite.cyberdb import CyberDB, cyberdb_schema, pm_ingestors, pm_reporters
+    from cybsuite.cyberdb import (
+        CyberDB,
+        cyberdb_schema,
+        pm_cyberdb_scanner,
+        pm_ingestors,
+        pm_reporters,
+    )
 except ImportError:
     # Fallback or mock for development
     cyberdb_schema = None
     CyberDB = None
     pm_ingestors = None
     pm_reporters = None
+    pm_cyberdb_scanner = None
 
 # TODO: remove these temporary placeholders:
 example_categories = ["pentest", "network", "vulnerability"]
@@ -1475,6 +1484,93 @@ def generate_report(request, reporter_name):
         )
 
 
+# Scan Operations Endpoints
+@api_view(["POST"])
+def start_scan(request):
+    """Start a new scan"""
+    if pm_cyberdb_scanner is None:
+        return Response(
+            {"error": "Scanners not available"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    try:
+        # Check if a scan is already running
+        current_status = cache.get("current_scan_status", {})
+        if current_status.get("status") == "running":
+            return Response(
+                {
+                    "error": "A scan is already running",
+                    "current_scanner": current_status.get("scanner_name"),
+                    "start_time": current_status.get("start_time"),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Get the scanner name from the request data
+        scanner_name = request.data.get("scanner_name")
+        if not scanner_name:
+            return Response(
+                {"error": "Missing scanner_name"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Check if the scanner exists
+        if scanner_name not in [plugin.name for plugin in pm_cyberdb_scanner]:
+            return Response(
+                {"error": f"Scanner '{scanner_name}' not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Get additional scan parameters from request
+        scan_kwargs = request.data.get("scan_kwargs", {})
+
+        # Start the real scan
+        db = CyberDB.from_default_config()
+        run_scan_async(db, pm_cyberdb_scanner, scanner_name, scan_kwargs)
+
+        return Response(
+            {
+                "status": "Scan started",
+                "scanner_name": scanner_name,
+                "message": "Scan has been initiated. Use WebSocket connection to monitor progress.",
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+    except Exception as e:
+        return Response(
+            {"error": f"Error starting scan: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["GET"])
+def get_scan_status(request):
+    """Get current scan status"""
+    current_status = cache.get(
+        "current_scan_status",
+        {
+            "status": "idle",
+            "scanner_name": None,
+            "start_time": None,
+            "end_time": None,
+            "progress": 0,
+            "progress_bar": 0,
+            "progress_type": "indeterminate",
+            "current_portion": 0,
+            "total_portions": None,
+            "current_step": 0,
+            "total_steps": None,
+            "message": "No scan running",
+            "results": None,
+            "error": None,
+        },
+    )
+
+    return Response(current_status)
+
+
 # Plugin Operations Endpoints
 @api_view(["GET"])
 def get_reporters(request):
@@ -1502,6 +1598,23 @@ def get_ingestors(request):
     return Response(ingestors)
 
 
+@api_view(["GET"])
+def get_scanners(request):
+    """Get a list of all available database scanners"""
+    if pm_cyberdb_scanner is None:
+        return Response(
+            {"error": "Database scanners not available"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    db_scanners = [
+        {"name": scanner.name, "description": scanner.metadata.description}
+        for scanner in pm_cyberdb_scanner
+    ]
+    return Response(db_scanners)
+
+
+# Additional Endpoints
 @api_view(["GET"])
 def get_schema_categories(request):
     """Get a list of all available entity categories"""

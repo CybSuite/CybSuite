@@ -12,7 +12,9 @@ class CleanPortsScanner(BaseCyberDBScanner):
     def do_run(self):
         i_removed_hosts = 0
 
-        for host in self.cyberdb.request("host"):
+        hosts = self.cyberdb.request("host")
+        self._set_progress_total_steps(len(hosts) + 2)
+        for host in hosts:
             services = host.services.all()
             service_ports = {service.port for service in services}
 
@@ -22,6 +24,8 @@ class CleanPortsScanner(BaseCyberDBScanner):
                 # TODO: must also check if this host is not added by other source or ping or ...
                 #  but for now it's ok
                 host.delete()
+
+            self._next_progress_step()
         # TODO: fixme do not print like this ...
 
         self.logger.info(
@@ -30,8 +34,12 @@ class CleanPortsScanner(BaseCyberDBScanner):
         nb_removed_services = (
             self.cyberdb.request("service").filter(port=2000).delete()[0]
         )
+        self._next_progress_step()
+
         self.logger.info(f"Removed {nb_removed_services} services with port 2000")
         nb_removed_services = (
             self.cyberdb.request("service").filter(port=5060).delete()[0]
         )
+        self._next_progress_step()
+
         self.logger.info(f"Removed {nb_removed_services} services with port 5060")

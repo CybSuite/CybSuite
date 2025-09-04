@@ -39,9 +39,16 @@ class ServicesVersionScanner(BaseCyberDBScanner):
         # - Password reuse (for AD users)
         # - Hash reuse for NTLM and LM (for AD users)
 
+        self._set_progress_total_portions(6)
+
         self._scan_lm_hash_used()
+        self._next_progress_portion()
+
         self._scan_auth_reuse_cross_ad()
+        self._next_progress_portion()
+
         self._scan_auth_reuse_cross_windows()
+        self._next_progress_portion()
 
         passwords = self._check_reuse(
             self.cyberdb.request("ad_user", password__isnull=False).exclude(
@@ -49,6 +56,7 @@ class ServicesVersionScanner(BaseCyberDBScanner):
             ),
             key="password",
         )
+        self._set_progress_total_steps(len(passwords))
         for password, users in passwords.items():
             self.alert(
                 "password.reuse",
@@ -59,6 +67,8 @@ class ServicesVersionScanner(BaseCyberDBScanner):
                     "count": len(users),
                 },
             )
+            self._next_progress_step()
+        self._next_progress_portion()
 
         ntlm_hashes = self._check_reuse(
             self.cyberdb.request("ad_user", ntlm__isnull=False).exclude(
@@ -66,6 +76,7 @@ class ServicesVersionScanner(BaseCyberDBScanner):
             ),
             key="ntlm",
         )
+        self._set_progress_total_steps(len(ntlm_hashes))
         for ntlm_hash, users in ntlm_hashes.items():
             self.alert(
                 "hash.reuse",
@@ -77,6 +88,8 @@ class ServicesVersionScanner(BaseCyberDBScanner):
                     "count": len(users),
                 },
             )
+            self._next_progress_step()
+        self._next_progress_portion()
 
         lm_hashes = self._check_reuse(
             self.cyberdb.request("ad_user", lm__isnull=False).exclude(
@@ -84,6 +97,7 @@ class ServicesVersionScanner(BaseCyberDBScanner):
             ),
             key="lm",
         )
+        self._set_progress_total_steps(len(lm_hashes))
         for lm_hash, users in lm_hashes.items():
             self.alert(
                 "hash.reuse",
@@ -95,6 +109,8 @@ class ServicesVersionScanner(BaseCyberDBScanner):
                     "count": len(users),
                 },
             )
+            self._next_progress_step()
+        self._next_progress_portion()
 
         return
 

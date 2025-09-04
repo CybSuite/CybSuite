@@ -11,6 +11,8 @@ class ServicesVersionScanner(BaseCyberDBScanner):
     controls = ["service.weak_service", "ldap.anonymous"]
 
     def do_run(self):
+        self._set_progress_total_portions(2)
+
         # Configuration for weak services
         weak_services = {
             514: {
@@ -35,6 +37,7 @@ class ServicesVersionScanner(BaseCyberDBScanner):
 
         # TODO: later for service also
         # Check for weak services
+        self._set_progress_total_steps(len(weak_services))
         for port, config in weak_services.items():
             for service in self.cyberdb.request(
                 "service", port=port, protocol=config["protocol"]
@@ -53,11 +56,13 @@ class ServicesVersionScanner(BaseCyberDBScanner):
                     severity=config["severity"],
                     confidence=config["confidence"],
                 )
+            self._next_progress_step()
+        self._next_progress_portion()
 
         # Check for LDAP anonymous bind
-        for service in self.cyberdb.request(
-            "service", nmap_version="(Anonymous bind OK)"
-        ):
+        services = self.cyberdb.request("service", nmap_version="(Anonymous bind OK)")
+        self._set_progress_total_steps(len(services))
+        for service in services:
             details = {
                 "ip": service.host.ip,
                 "hostname": service.host.hostname,
@@ -71,3 +76,5 @@ class ServicesVersionScanner(BaseCyberDBScanner):
                 severity="medium",
                 confidence="certain",
             )
+            self._next_progress_step()
+        self._next_progress_portion()

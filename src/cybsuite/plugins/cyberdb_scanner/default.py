@@ -9,10 +9,14 @@ class DefaultScanner(BaseCyberDBScanner):
     )
 
     def do_run(self):
-        for scaner in pm_cyberdb_scanner.iter(tags=["default"]):
+        scanners = pm_cyberdb_scanner
+        self._set_progress_total_portions(len(scanners))
+        for scaner in scanners.iter(tags=["default"]):
             self.logger.info(f"Running {scaner.name} scanner")
             scanner = scaner(self.cyberdb)
             try:
                 scanner.do_run()
             except Exception as e:
                 self.logger.error(f"Error running {scaner.name} scanner: {e}")
+
+            self._next_progress_portion()

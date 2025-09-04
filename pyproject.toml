@@ -37,6 +37,9 @@ devtools = "^0.12.2"
 djangorestframework = "^3.15.0"
 django-cors-headers = "^4.7.0"
 python-dotenv = "^1.1.1"
+channels = "^4.3.1"
+daphne = "^4.2.1"
+tzlocal = "^5.3.1"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
