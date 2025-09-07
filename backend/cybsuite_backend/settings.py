@@ -15,6 +15,7 @@ from pathlib import Path
 
 from cybsuite.core.config import workspaces_config
 from dotenv import load_dotenv
+from tzlocal import get_localzone
 
 # Load environment variables from .env file
 load_dotenv()
@@ -45,6 +46,8 @@ ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS_ENV.split(",") if host.s
 
 # Application definition
 INSTALLED_APPS = [
+    "channels",
+    "daphne",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -89,6 +92,10 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "cybsuite_backend.wsgi.application"
+ASGI_APPLICATION = "cybsuite_backend.asgi.application"
+
+# Channels configuration
+CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
 
 
 # Database
@@ -130,7 +137,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = "UTC"
+TIME_ZONE = str(get_localzone())
 
 USE_I18N = True
 

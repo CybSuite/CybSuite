@@ -149,9 +149,24 @@ Flattened response:
 - `GET /api/v1/report/data/{reporter_name}/` - Get raw data for a report (JSON or other format)
 - `GET /api/v1/report/{reporter}/` - Generate and download report
 
+## Scan Operations
+- `POST /api/v1/scan/` - Start a new scan
+  - Payload: `{"scanner_name": "scanner_name"}`
+  - Returns: `{"status": "Scan started", "scanner_name": "...", "message": "..."}`
+  - Status codes: 202 (Accepted), 409 (Conflict if scan already running), 400 (Bad Request), 404 (Scanner not found)
+- `GET /api/v1/scan/status/` - Get current scan status
+  - Returns: `{"status": "idle|running|completed|failed", "scanner_name": "...", "progress": 0-100, "message": "...", "results": {...}, "error": "..."}`
+
+## WebSocket Operations
+- `ws://host/ws/scan-status/` - Real-time scan status updates
+  - Receives: `{"type": "scan_status", "data": {...}}`
+  - Send: `{"type": "get_status"}` to request current status
+
 ## Plugin Operations
 - `GET /api/v1/plugins/reporters/` - List reporters
 - `GET /api/v1/plugins/ingestors/` - List ingestors
+- `GET /api/v1/plugins/scanners/` - List available database scanners
+  - Returns: `[{"name": "scanner_name", "description": "Scanner description"}, ...]`
 
 ## Form Operations
 - `GET /api/v1/form/schema/{entity}/` - Get form schema for creating/editing an entity

@@ -199,7 +199,7 @@ export function Navigation({ navigationData }: NavigationProps) {
 
 				{/* App Switcher */}
 				<div className="ml-auto flex items-center space-x-4">
-					<DropdownMenu>
+					<DropdownMenu modal={false}>
 						<DropdownMenuTrigger asChild>
 							<Button
 								variant="ghost"
@@ -244,7 +244,7 @@ export function Navigation({ navigationData }: NavigationProps) {
 
 				{/* User Menu */}
 				<div className="ml-3 flex items-center space-x-4">
-					<DropdownMenu>
+					<DropdownMenu modal={false}>
 						<DropdownMenuTrigger asChild>
 							<Button variant="ghost" size="icon">
 								<Settings className="h-4 w-4" />

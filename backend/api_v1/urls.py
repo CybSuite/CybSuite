@@ -92,9 +92,13 @@ urlpatterns = [
         name="get_reporter_data",
     ),
     path("report/<str:reporter_name>/", views.generate_report, name="generate_report"),
+    # Scan endpoints
+    path("scan/", views.start_scan, name="start_scan"),
+    path("scan/status/", views.get_scan_status, name="get_scan_status"),
     # Plugin endpoints
     path("plugins/reporters/", views.get_reporters, name="get_reporters"),
     path("plugins/ingestors/", views.get_ingestors, name="get_ingestors"),
+    path("plugins/scanners/", views.get_scanners, name="get_scanners"),
     # Form endpoints
     path(
         "form/schema/<str:entity>/",

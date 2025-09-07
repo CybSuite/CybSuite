@@ -410,18 +410,24 @@ export const api = {
 
   // Report endpoints
   reports: {
-    getReporters: () => apiClient.get<Array<{name: string}>>("/api/v1/plugins/reporters/"),
+    getReporters: () =>
+      apiClient.get<Array<{ name: string }>>("/api/v1/plugins/reporters/"),
     getReportData: (reporterName: string, params?: { latest_run?: number }) => {
       const searchParams = new URLSearchParams();
       if (params?.latest_run !== undefined)
         searchParams.set("latest_run", params.latest_run.toString());
 
       const queryString = searchParams.toString();
-      return apiClient.get<any>(`/api/v1/report/data/${reporterName}/${
-        queryString ? `?${queryString}` : ""
-      }`);
+      return apiClient.get<any>(
+        `/api/v1/report/data/${reporterName}/${
+          queryString ? `?${queryString}` : ""
+        }`
+      );
     },
-    downloadReport: (reporterName: string, params?: { latest_run?: number }) => {
+    downloadReport: (
+      reporterName: string,
+      params?: { latest_run?: number }
+    ) => {
       const searchParams = new URLSearchParams();
       if (params?.latest_run !== undefined)
         searchParams.set("latest_run", params.latest_run.toString());
@@ -433,6 +439,41 @@ export const api = {
         queryString ? `?${queryString}` : ""
       }`;
     },
+  },
+
+  // Scanner endpoints
+  scanners: {
+    getScanners: () =>
+      apiClient.get<
+        Array<{ name: string; description: string | null; tags: string[] }>
+      >("/api/v1/plugins/scanners/"),
+    startScan: (scannerName: string) =>
+      apiClient.post<{ status: string; scanner_name: string; message: string }>(
+        "/api/v1/scan/",
+        { scanner_name: scannerName }
+      ),
+    startMultiScan: (scannerNames: string[]) =>
+      apiClient.post<{
+        status: string;
+        scanner_names: string[];
+        total_scanners: number;
+        message: string;
+      }>("/api/v1/scan/", { scanner_names: scannerNames }),
+    getScanStatus: () =>
+      apiClient.get<{
+        status: "idle" | "running" | "completed" | "failed";
+        scanner_name: string | null;
+        scanner_names?: string[];
+        start_time: string | null;
+        end_time: string | null;
+        progress: number;
+        message: string;
+        results: any | null;
+        error: string | null;
+        multi_scan?: boolean;
+        current_scanner?: string;
+        scanned_scanners?: string[];
+      }>("/api/v1/scan/status/"),
   },
 
   // Legacy endpoints (backward compatibility)
@@ -501,13 +542,15 @@ export const serverApi = {
       entity: string,
       cookies?: string,
       flattenDict?: boolean,
-      isObservation?: boolean,
+      isObservation?: boolean
     ) => {
       const params = new URLSearchParams();
       if (flattenDict) params.set("flatten_dict", "true");
       if (isObservation) params.set("isObservation", "true");
       return createServerApiClient(cookies).get<EntitySchema>(
-        `/api/v1/schema/entity/${entity}/${params.toString ? `?${params.toString()}` : ""}`
+        `/api/v1/schema/entity/${entity}/${
+          params.toString ? `?${params.toString()}` : ""
+        }`
       );
     },
     getEntityFieldNames: (entity: string, cookies?: string) =>
@@ -756,18 +799,29 @@ export const serverApi = {
   // Report endpoints
   reports: {
     getReporters: (cookies?: string) =>
-      createServerApiClient(cookies).get<Array<{name: string}>>("/api/v1/plugins/reporters/"),
-    getReportData: (reporterName: string, params?: { latest_run?: number }, cookies?: string) => {
+      createServerApiClient(cookies).get<Array<{ name: string }>>(
+        "/api/v1/plugins/reporters/"
+      ),
+    getReportData: (
+      reporterName: string,
+      params?: { latest_run?: number },
+      cookies?: string
+    ) => {
       const searchParams = new URLSearchParams();
       if (params?.latest_run !== undefined)
         searchParams.set("latest_run", params.latest_run.toString());
 
       const queryString = searchParams.toString();
-      return createServerApiClient(cookies).get<any>(`/api/v1/report/data/${reporterName}/${
-        queryString ? `?${queryString}` : ""
-      }`);
+      return createServerApiClient(cookies).get<any>(
+        `/api/v1/report/data/${reporterName}/${
+          queryString ? `?${queryString}` : ""
+        }`
+      );
     },
-    getDownloadUrl: (reporterName: string, params?: { latest_run?: number }) => {
+    getDownloadUrl: (
+      reporterName: string,
+      params?: { latest_run?: number }
+    ) => {
       const searchParams = new URLSearchParams();
       if (params?.latest_run !== undefined)
         searchParams.set("latest_run", params.latest_run.toString());
@@ -779,6 +833,31 @@ export const serverApi = {
         queryString ? `?${queryString}` : ""
       }`;
     },
+  },
+
+  // Scanner endpoints
+  scanners: {
+    getScanners: (cookies?: string) =>
+      createServerApiClient(cookies).get<
+        Array<{ name: string; description: string }>
+      >("/api/v1/plugins/scanners/"),
+    startScan: (scannerName: string, cookies?: string) =>
+      createServerApiClient(cookies).post<{
+        status: string;
+        scanner_name: string;
+        message: string;
+      }>("/api/v1/scan/", { scanner_name: scannerName }),
+    getScanStatus: (cookies?: string) =>
+      createServerApiClient(cookies).get<{
+        status: "idle" | "running" | "completed" | "failed";
+        scanner_name: string | null;
+        start_time: string | null;
+        end_time: string | null;
+        progress: number;
+        message: string;
+        results: any | null;
+        error: string | null;
+      }>("/api/v1/scan/status/"),
   },
 };
 
