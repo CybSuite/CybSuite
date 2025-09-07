@@ -11,7 +11,10 @@ class ServicesVersionScanner(BaseCyberDBScanner):
     controls = ["service.weak_service", "ldap.anonymous"]
 
     def do_run(self):
-        self._set_progress_total_portions(2)
+        self.set_progress_total_portions(labels=[
+            "Checking for weak services",
+            "Checking LDAP anonymous bind"
+        ])
 
         # Configuration for weak services
         weak_services = {
@@ -37,8 +40,10 @@ class ServicesVersionScanner(BaseCyberDBScanner):
 
         # TODO: later for service also
         # Check for weak services
-        self._set_progress_total_steps(len(weak_services))
+        self.set_progress_total_steps(len(weak_services))
         for port, config in weak_services.items():
+            self.set_progress_current_step_label(f"Checking {config['service']} service on port {port}")
+
             for service in self.cyberdb.request(
                 "service", port=port, protocol=config["protocol"]
             ):
@@ -56,12 +61,12 @@ class ServicesVersionScanner(BaseCyberDBScanner):
                     severity=config["severity"],
                     confidence=config["confidence"],
                 )
-            self._next_progress_step()
-        self._next_progress_portion()
+            self.next_progress_step()
+        self.next_progress_portion()
 
         # Check for LDAP anonymous bind
         services = self.cyberdb.request("service", nmap_version="(Anonymous bind OK)")
-        self._set_progress_total_steps(len(services))
+        self.set_progress_total_steps(len(services))
         for service in services:
             details = {
                 "ip": service.host.ip,
@@ -70,11 +75,12 @@ class ServicesVersionScanner(BaseCyberDBScanner):
                 "port": service.port,
                 "protocol": service.protocol,
             }
+            self.set_progress_current_step_label(f"Checking LDAP anonymous bind on {service.host.ip}:{service.port}")
             self.alert(
                 "ldap.anonymous",
                 details=details,
                 severity="medium",
                 confidence="certain",
             )
-            self._next_progress_step()
-        self._next_progress_portion()
+            self.next_progress_step()
+        self.next_progress_portion()

@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING
 
 from cybsuite.core.logger import get_logger
 from cybsuite.core.printer import printer
+from cybsuite.cyberdb.cyberdb_progress_mixin import CyberDBProgressMixin
 from cybsuite.utils import log_exception
 from django.forms.models import model_to_dict
 
@@ -95,7 +96,7 @@ class Control:
         )
 
 
-class CyberDBPluginBaseMixin:
+class CyberDBPluginBaseMixin(CyberDBProgressMixin):
     controls = []
 
     def __init__(
@@ -109,6 +110,8 @@ class CyberDBPluginBaseMixin:
         enable_print_existing_status=None,
         enabe_printing_feed=None,
     ):
+        super().__init__()
+
         if enable_printing is None:
             enable_printing = False
         if enabe_printing_feed:
@@ -157,12 +160,6 @@ class CyberDBPluginBaseMixin:
         self.track_unprinted_feed_insertions = {}
         self.track_unprinted_controls = {}
 
-        # attributes related to progress #
-        # ------------------------------ #
-        self._total_portions = None
-        self._current_portion = 0
-        self._total_steps = None
-        self._current_step = 0
 
     def alert(self, obs_name, *, _as_control=None, **kwargs):
         """Main function to create new control (could also be created with feed)"""
@@ -286,6 +283,9 @@ class CyberDBPluginBaseMixin:
 
         if not_in_db:
             raise ValueError(f"Following controls are not in DB {not_in_db}")
+
+    def cleanup(self):
+        self.progress.cleanup_progress()
 
     # =========================== #
     # Methods related to printing #
@@ -414,51 +414,3 @@ class CyberDBPluginBaseMixin:
         }
         other_kwargs = {k: v for k, v in new_entry.items() if k not in updated_kwargs}
         return other_kwargs, unpresent_kwargs, updated_kwargs
-
-    # =========================== #
-    # Methods related to progress #
-    # =========================== #
-    def _set_progress_total_portions(self, n):
-        if n is None or not isinstance(n, int) or n <= 0 or n < self._current_portion:
-            raise ValueError(
-                "Portions number must be a positive integer, greater than or equals the current portion"
-            )
-
-        self._total_portions = n
-
-    def _next_progress_portion(self, n=None):
-        if n is None:
-            n = 1
-        elif not isinstance(n, int) or n <= 0:
-            raise ValueError("Portion increment must be a positive integer")
-
-        self._current_portion += n
-        self._total_steps = None
-        self._current_step = 0
-
-    def _set_progress_total_steps(self, n):
-        if n in [None, 0]:
-            self._total_steps = None
-
-        if not isinstance(n, int) or n < self._current_step:
-            raise ValueError(
-                "Total steps must be a positive integer or None, greater than or equals the current step"
-            )
-
-        self._total_steps = n
-
-    def _next_progress_step(self, n=None):
-        if n is None:
-            n = 1
-        elif not isinstance(n, int) or n <= 0:
-            raise ValueError("Step increment must be a positive integer")
-
-        self._current_step += n
-
-    def get_progress(self):
-        return {
-            "total_portions": self._total_portions,
-            "current_portion": self._current_portion,
-            "total_steps": self._total_steps,
-            "current_step": self._current_step,
-        }

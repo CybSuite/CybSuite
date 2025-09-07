@@ -4,6 +4,7 @@ import { api } from "@/app/lib/api";
 export interface ScanStatus {
   status: "idle" | "running" | "completed" | "failed";
   scanner_name: string | null;
+  scanner_names?: string[];
   start_time: string | null;
   end_time: string | null;
   progress: number;
@@ -13,9 +14,14 @@ export interface ScanStatus {
   total_portions?: number | null;
   current_step?: number;
   total_steps?: number | null;
+  portion_label?: string | null;
+  step_label?: string | null;
   message: string;
   results: any | null;
   error: string | null;
+  multi_scan?: boolean;
+  current_scanner?: string;
+  scanned_scanners?: string[];
 }
 
 export interface LogMessage {

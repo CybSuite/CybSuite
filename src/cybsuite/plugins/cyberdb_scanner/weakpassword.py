@@ -102,13 +102,14 @@ class WeakPasswordScanner(BaseCyberDBScanner):
             ),
             ("password", []),
         ]
-        self._set_progress_total_portions(len(table_names))
+        self.set_progress_total_portions(labels=[f"Analysing {t[0]} table" for t in table_names])
         for table_name, fields in table_names:
             entries = self.cyberdb.request(table_name, password__isnull=False).exclude(
                 password=""
             )
-            self._set_progress_total_steps(len(entries))
+            self.set_progress_total_steps(len(entries))
             for entry in entries:
+                self.set_progress_current_step_label(str(entry))
 
                 password = entry.password
                 entropy, reasons, severity = self._analyse_password(
@@ -138,5 +139,5 @@ class WeakPasswordScanner(BaseCyberDBScanner):
                     },
                 ).ko(password_is_weak, confidence="certain", severity=severity)
 
-                self._next_progress_step()
-            self._next_progress_portion()
+                self.next_progress_step()
+            self.next_progress_portion()

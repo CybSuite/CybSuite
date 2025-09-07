@@ -1071,6 +1071,8 @@ def run_scan_async(db, pm_cyberdb_scanner, scanner_name, scan_kwargs=None):
                     "total_portions": None,
                     "current_step": 0,
                     "total_steps": None,
+                    "portion_label": None,
+                    "step_label": None,
                     "message": f"Initializing {scanner_name} scanner...",
                     "results": None,
                     "error": None,
@@ -1116,6 +1118,8 @@ def run_scan_async(db, pm_cyberdb_scanner, scanner_name, scan_kwargs=None):
                                         "current_step", 0
                                     ),
                                     "total_steps": current_progress.get("total_steps"),
+                                    "portion_label": current_progress.get("portion_label"),
+                                    "step_label": current_progress.get("step_label"),
                                     "message": get_progress_message(
                                         scanner_name, current_progress
                                     ),
@@ -1158,6 +1162,8 @@ def run_scan_async(db, pm_cyberdb_scanner, scanner_name, scan_kwargs=None):
                     "total_portions": final_progress.get("total_portions", 1),
                     "current_step": final_progress.get("total_steps", 1),
                     "total_steps": final_progress.get("total_steps", 1),
+                    "portion_label": final_progress.get("portion_label"),
+                    "step_label": final_progress.get("step_label"),
                     "message": "Scan completed - finalizing results...",
                     "results": None,
                     "error": None,
@@ -1197,6 +1203,8 @@ def run_scan_async(db, pm_cyberdb_scanner, scanner_name, scan_kwargs=None):
                     "total_portions": final_progress.get("total_portions", 1),
                     "current_step": final_progress.get("current_step", 1),
                     "total_steps": final_progress.get("total_steps", 1),
+                    "portion_label": final_progress.get("portion_label"),
+                    "step_label": final_progress.get("step_label"),
                     "message": "Scan completed successfully",
                     "results": formatted_results,
                     "error": None,
@@ -1236,6 +1244,8 @@ def run_scan_async(db, pm_cyberdb_scanner, scanner_name, scan_kwargs=None):
                         "total_portions": final_progress.get("total_portions"),
                         "current_step": final_progress.get("current_step", 0),
                         "total_steps": final_progress.get("total_steps"),
+                        "portion_label": final_progress.get("portion_label"),
+                        "step_label": final_progress.get("step_label"),
                         "message": f"Scan failed: {str(e)}",
                         "results": None,
                         "error": str(e),
@@ -1255,6 +1265,8 @@ def run_scan_async(db, pm_cyberdb_scanner, scanner_name, scan_kwargs=None):
                         "total_portions": None,
                         "current_step": 0,
                         "total_steps": None,
+                        "portion_label": None,
+                        "step_label": None,
                         "message": f"Scan failed: {str(e)}",
                         "results": None,
                         "error": str(e),
@@ -1263,5 +1275,308 @@ def run_scan_async(db, pm_cyberdb_scanner, scanner_name, scan_kwargs=None):
 
     # Run in thread to not block the request
     thread = threading.Thread(target=real_scan)
+    thread.daemon = True
+    thread.start()
+
+
+def run_multiple_scans_async(db, pm_cyberdb_scanner, scanner_names, scan_kwargs=None):
+    """Run multiple scans sequentially in a separate thread with WebSocket status updates"""
+    if scan_kwargs is None:
+        scan_kwargs = {}
+    
+    if not scanner_names or len(scanner_names) == 0:
+        raise ValueError("No scanner names provided")
+    
+    # If only one scanner, use the single scan function
+    if len(scanner_names) == 1:
+        return run_scan_async(db, pm_cyberdb_scanner, scanner_names[0], scan_kwargs)
+
+    def multiple_scans():
+        all_results = []
+        all_scan_details = []
+        overall_start_time = datetime.now().isoformat()
+        
+        try:
+            broadcast_func = async_to_sync(ScanStatusBroadcaster.broadcast_status)
+            
+            # Broadcast multi-scan started
+            broadcast_func(
+                {
+                    "status": "running",
+                    "scanner_name": f"Multiple Scanners ({len(scanner_names)} scanners)",
+                    "scanner_names": scanner_names,
+                    "start_time": overall_start_time,
+                    "end_time": None,
+                    "progress": 0,
+                    "progress_bar": 0,
+                    "display_mode": "dual",
+                    "current_portion": 0,
+                    "total_portions": len(scanner_names),
+                    "current_step": 0,
+                    "total_steps": 1,  # Will be updated per scanner
+                    "portion_label": f"Multi-Scan Progress ({len(scanner_names)} scanners)",
+                    "step_label": None,
+                    "message": f"Starting multi-scan with {len(scanner_names)} scanners...",
+                    "results": None,
+                    "error": None,
+                    "multi_scan": True,
+                    "scanned_scanners": [],
+                }
+            )
+            
+            # Run each scanner sequentially
+            for i, scanner_name in enumerate(scanner_names):
+                try:
+                    scanner_start_time = datetime.now().isoformat()
+                    
+                    # Get scanner class and initialize it
+                    scanner_class = None
+                    for plugin in pm_cyberdb_scanner:
+                        if plugin.name == scanner_name:
+                            scanner_class = plugin
+                            break
+
+                    if not scanner_class:
+                        raise ValueError(f"Scanner '{scanner_name}' not found")
+
+                    scanner_instance = scanner_class(db)
+                    
+                    # Set up real-time log streaming for current scanner
+                    log_handler = WebSocketLogHandler(broadcast_func, scanner_name)
+                    scanner_instance.logger.addHandler(log_handler)
+                    original_log_level = scanner_instance.logger.level
+                    scanner_instance.logger.setLevel(logging.INFO)
+                    
+                    # Calculate overall progress
+                    overall_progress = int((i / len(scanner_names)) * 100)
+                    
+                    # Broadcast current scanner starting
+                    broadcast_func(
+                        {
+                            "status": "running",
+                            "scanner_name": f"Multiple Scanners ({len(scanner_names)} scanners)",
+                            "scanner_names": scanner_names,
+                            "current_scanner": scanner_name,
+                            "start_time": overall_start_time,
+                            "end_time": None,
+                            "progress": overall_progress,
+                            "progress_bar": 0,
+                            "display_mode": "dual",
+                            "current_portion": i + 1,
+                            "total_portions": len(scanner_names),
+                            "current_step": 0,
+                            "total_steps": None,
+                            "portion_label": f"Multi-Scan Progress ({len(scanner_names)} scanners)",
+                            "step_label": f"Running {scanner_name}",
+                            "message": f"Running {scanner_name} scanner ({i + 1}/{len(scanner_names)})...",
+                            "results": None,
+                            "error": None,
+                            "multi_scan": True,
+                            "scanned_scanners": [s["name"] for s in all_scan_details],
+                        }
+                    )
+                    
+                    # Monitor progress for current scanner
+                    scan_complete_event = threading.Event()
+                    
+                    def progress_monitor():
+                        last_progress = None
+                        while not scan_complete_event.is_set():
+                            if scanner_instance is None:
+                                break
+
+                            try:
+                                current_progress = scanner_instance.get_progress()
+
+                                # Only broadcast if progress changed
+                                if current_progress != last_progress:
+                                    display_info = get_progress_display_mode(current_progress)
+                                    progress_bar_percentage = calculate_progress_bar_percentage(current_progress)
+                                    overall_progress = int((i / len(scanner_names)) * 100)
+
+                                    broadcast_func(
+                                        {
+                                            "status": "running",
+                                            "scanner_name": f"Multiple Scanners ({len(scanner_names)} scanners)",
+                                            "scanner_names": scanner_names,
+                                            "current_scanner": scanner_name,
+                                            "start_time": overall_start_time,
+                                            "end_time": None,
+                                            "progress": overall_progress,
+                                            "progress_bar": progress_bar_percentage,
+                                            "display_mode": "dual",
+                                            "current_portion": i + 1,
+                                            "total_portions": len(scanner_names),
+                                            "current_step": current_progress.get("current_step", 0),
+                                            "total_steps": current_progress.get("total_steps"),
+                                            "portion_label": f"Multi-Scan Progress ({len(scanner_names)} scanners)",
+                                            "step_label": current_progress.get("step_label") or f"Running {scanner_name}",
+                                            "message": get_progress_message(scanner_name, current_progress),
+                                            "results": None,
+                                            "error": None,
+                                            "multi_scan": True,
+                                            "scanned_scanners": [s["name"] for s in all_scan_details],
+                                        }
+                                    )
+                                    last_progress = current_progress.copy()
+
+                                # Check every 500ms
+                                if scan_complete_event.wait(0.5):
+                                    break
+
+                            except Exception:
+                                break
+
+                    # Start progress monitoring thread
+                    progress_thread = threading.Thread(target=progress_monitor, daemon=True)
+                    progress_thread.start()
+                    
+                    # Run the actual scan
+                    scan_results = scanner_instance.run(**scan_kwargs)
+                    
+                    # Signal scan complete for this scanner
+                    scan_complete_event.set()
+                    progress_thread.join(timeout=1.0)
+                    
+                    # Clean up log handler
+                    scanner_instance.logger.removeHandler(log_handler)
+                    scanner_instance.logger.setLevel(original_log_level)
+                    
+                    # Store results
+                    scanner_end_time = datetime.now().isoformat()
+                    formatted_results = format_scan_results(scan_results, scanner_instance)
+                    
+                    scan_detail = {
+                        "name": scanner_name,
+                        "start_time": scanner_start_time,
+                        "end_time": scanner_end_time,
+                        "status": "completed",
+                        "results": formatted_results,
+                        "error": None
+                    }
+                    
+                    all_scan_details.append(scan_detail)
+                    all_results.append(formatted_results)
+                    
+                    # Broadcast scanner completion
+                    overall_progress = int(((i + 1) / len(scanner_names)) * 100)
+                    broadcast_func(
+                        {
+                            "status": "running",
+                            "scanner_name": f"Multiple Scanners ({len(scanner_names)} scanners)",
+                            "scanner_names": scanner_names,
+                            "current_scanner": scanner_name,
+                            "start_time": overall_start_time,
+                            "end_time": None,
+                            "progress": overall_progress,
+                            "progress_bar": 100,
+                            "display_mode": "dual",
+                            "current_portion": i + 1,
+                            "total_portions": len(scanner_names),
+                            "current_step": scanner_instance.get_progress().get("total_steps", 1) if scanner_instance else 1,
+                            "total_steps": scanner_instance.get_progress().get("total_steps", 1) if scanner_instance else 1,
+                            "portion_label": f"Multi-Scan Progress ({len(scanner_names)} scanners)",
+                            "step_label": f"{scanner_name} completed",
+                            "message": f"{scanner_name} completed successfully",
+                            "results": None,
+                            "error": None,
+                            "multi_scan": True,
+                            "scanned_scanners": [s["name"] for s in all_scan_details],
+                        }
+                    )
+                    
+                except Exception as e:
+                    # Handle individual scanner failure
+                    scanner_end_time = datetime.now().isoformat()
+                    scan_detail = {
+                        "name": scanner_name,
+                        "start_time": scanner_start_time if 'scanner_start_time' in locals() else datetime.now().isoformat(),
+                        "end_time": scanner_end_time,
+                        "status": "failed",
+                        "results": None,
+                        "error": str(e)
+                    }
+                    all_scan_details.append(scan_detail)
+                    
+                    # Clean up on error
+                    if 'scanner_instance' in locals() and scanner_instance:
+                        try:
+                            scanner_instance.logger.removeHandler(log_handler)
+                            scanner_instance.logger.setLevel(original_log_level)
+                        except:
+                            pass
+                    
+                    # Continue with next scanner
+                    continue
+            
+            # All scanners completed
+            overall_end_time = datetime.now().isoformat()
+            
+            # Prepare combined results
+            combined_results = {
+                "message": f"Multi-scan completed: {len(all_scan_details)} scanners processed",
+                "summary": {
+                    "total_scanners": len(scanner_names),
+                    "successful_scans": len([s for s in all_scan_details if s["status"] == "completed"]),
+                    "failed_scans": len([s for s in all_scan_details if s["status"] == "failed"]),
+                    "scan_details": all_scan_details
+                },
+                "details": all_results,
+                "multi_scan": True,
+            }
+            
+            broadcast_func(
+                {
+                    "status": "completed",
+                    "scanner_name": f"Multiple Scanners ({len(scanner_names)} scanners)",
+                    "scanner_names": scanner_names,
+                    "start_time": overall_start_time,
+                    "end_time": overall_end_time,
+                    "progress": 100,
+                    "progress_bar": 100,
+                    "display_mode": "single",
+                    "current_portion": len(scanner_names),
+                    "total_portions": len(scanner_names),
+                    "current_step": 1,
+                    "total_steps": 1,
+                    "portion_label": f"Multi-Scan Completed ({len(scanner_names)} scanners)",
+                    "step_label": None,
+                    "message": f"Multi-scan completed successfully: {len([s for s in all_scan_details if s['status'] == 'completed'])} of {len(scanner_names)} scanners succeeded",
+                    "results": combined_results,
+                    "error": None,
+                    "multi_scan": True,
+                    "scanned_scanners": [s["name"] for s in all_scan_details],
+                }
+            )
+            
+        except Exception as e:
+            # Handle overall multi-scan failure
+            overall_end_time = datetime.now().isoformat()
+            broadcast_func(
+                {
+                    "status": "failed",
+                    "scanner_name": f"Multiple Scanners ({len(scanner_names)} scanners)",
+                    "scanner_names": scanner_names,
+                    "start_time": overall_start_time,
+                    "end_time": overall_end_time,
+                    "progress": 0,
+                    "progress_bar": 0,
+                    "display_mode": "single",
+                    "current_portion": 0,
+                    "total_portions": len(scanner_names),
+                    "current_step": 0,
+                    "total_steps": None,
+                    "portion_label": f"Multi-Scan Failed ({len(scanner_names)} scanners)",
+                    "step_label": None,
+                    "message": f"Multi-scan failed: {str(e)}",
+                    "results": None,
+                    "error": str(e),
+                    "multi_scan": True,
+                    "scanned_scanners": [s["name"] for s in all_scan_details],
+                }
+            )
+
+    # Run in thread to not block the request
+    thread = threading.Thread(target=multiple_scans)
     thread.daemon = True
     thread.start()

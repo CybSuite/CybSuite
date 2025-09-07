@@ -11,8 +11,10 @@ class SmbScanner(BaseCyberDBScanner):
 
     def do_run(self):
         services_smb = self.cyberdb.request("service_smb")
-        self._set_progress_total_steps(len(services_smb))
+        self.set_progress_total_steps(len(services_smb))
         for service_smb in services_smb:
+            self.set_progress_current_step_label(f"Scanning {str(service_smb)} record")
+
             service = service_smb.service
             host = service.host
             ip = host.ip
@@ -34,4 +36,4 @@ class SmbScanner(BaseCyberDBScanner):
             self.control("smb.smbv1", details=details).ko(
                 service_smb.smbv1, confidence="certain", severity="medium"
             )
-            self._next_progress_step()
+            self.next_progress_step()

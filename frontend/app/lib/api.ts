@@ -444,24 +444,35 @@ export const api = {
   // Scanner endpoints
   scanners: {
     getScanners: () =>
-      apiClient.get<Array<{ name: string; description: string }>>(
-        "/api/v1/plugins/scanners/"
-      ),
+      apiClient.get<
+        Array<{ name: string; description: string | null; tags: string[] }>
+      >("/api/v1/plugins/scanners/"),
     startScan: (scannerName: string) =>
       apiClient.post<{ status: string; scanner_name: string; message: string }>(
         "/api/v1/scan/",
         { scanner_name: scannerName }
       ),
+    startMultiScan: (scannerNames: string[]) =>
+      apiClient.post<{
+        status: string;
+        scanner_names: string[];
+        total_scanners: number;
+        message: string;
+      }>("/api/v1/scan/", { scanner_names: scannerNames }),
     getScanStatus: () =>
       apiClient.get<{
         status: "idle" | "running" | "completed" | "failed";
         scanner_name: string | null;
+        scanner_names?: string[];
         start_time: string | null;
         end_time: string | null;
         progress: number;
         message: string;
         results: any | null;
         error: string | null;
+        multi_scan?: boolean;
+        current_scanner?: string;
+        scanned_scanners?: string[];
       }>("/api/v1/scan/status/"),
   },
 

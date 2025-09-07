@@ -26,14 +26,10 @@ import {
     Check
 } from 'lucide-react'
 import { api } from '@/app/lib/api'
-import { useScanStatus } from '@/hooks/useScanStatus'
+import { useScanStatus } from '@/app/hooks/useScanStatus'
 import { cn } from '@/lib/utils'
 import { ProgressBar } from '@/app/components/ProgressBar'
-
-interface Scanner {
-    name: string
-    description: string
-}
+import { Scanner } from './ScannersList'
 
 interface ToastMessage {
     id: string
@@ -43,14 +39,30 @@ interface ToastMessage {
 
 interface ScannerControlsClientProps {
     scanners: Scanner[]
+    externalHandleStartScan?: (scannerName: string) => Promise<void>
+    externalStartingScan?: string | null
+    scanAllProgress?: {
+        current: number
+        total: number
+        scannedScanners: string[]
+        currentScanner: string | null
+    }
 }
 
-export default function ScannerControlsClient({ scanners }: ScannerControlsClientProps) {
+export default function ScannerControlsClient({
+    scanners,
+    externalHandleStartScan,
+    externalStartingScan,
+    scanAllProgress
+}: ScannerControlsClientProps) {
     const [startingScan, setStartingScan] = useState<string | null>(null)
     const [alerts, setAlerts] = useState<ToastMessage[]>([])
     const [selectedScanner, setSelectedScanner] = useState<string>("")
     const logsEndRef = useRef<HTMLDivElement>(null)
     const logsContainerRef = useRef<HTMLDivElement>(null)
+
+    // Use external state if provided, otherwise use internal state
+    const currentStartingScan = externalStartingScan !== undefined ? externalStartingScan : startingScan
 
     const {
         status: scanStatus,
@@ -90,17 +102,29 @@ export default function ScannerControlsClient({ scanners }: ScannerControlsClien
     }
 
     const handleStartScan = async (scannerName: string) => {
+        // If external handler is provided, use it instead
+        if (externalHandleStartScan) {
+            return externalHandleStartScan(scannerName)
+        }
+
+        // Original internal logic
         if (scanStatus.status === 'running') {
             showAlert('error', 'A scan is already running. Please wait for it to complete.')
             return
         }
 
-        // Try to reconnect WebSocket before starting scan to ensure real-time updates
-        if (!isConnected) {
+        // Enhanced WebSocket reconnection logic - try once if not connected
+        if (!isConnected && connectionState !== 'connecting') {
+            showAlert('info', 'Connecting to real-time updates...')
             resetConnection()
 
-            // Wait for WebSocket connection attempt
-            await new Promise(resolve => setTimeout(resolve, 2500))
+            // Wait for connection attempt - give it a bit more time  
+            await new Promise(resolve => setTimeout(resolve, 3000))
+
+            // If still not connected after retry, continue anyway but warn user
+            if (!isConnected) {
+                showAlert('info', 'Real-time updates may be limited. Scan will proceed.')
+            }
         }
 
         try {
@@ -237,32 +261,54 @@ export default function ScannerControlsClient({ scanners }: ScannerControlsClien
             return scanStatus.message
         }
 
-        // For running scans, use recent logs if available
-        if (scanStatus.status === 'running' && logs.length > 0) {
-            const latestLog = logs[logs.length - 1]
-            // Only use logs from the last 10 seconds to ensure they're current
-            const logAge = Date.now() - (latestLog.timestamp * 1000)
-            if (logAge < 10000) { // 10 seconds
-                return latestLog.message
-            }
-        }
-
-        // Fall back to formatted progress information for running scans
+        // For running scans, prioritize custom labels over logs
         if (scanStatus.status === 'running') {
-            const { current_portion, total_portions, current_step, total_steps } = scanStatus
+            const { current_portion, total_portions, current_step, total_steps, portion_label, step_label } = scanStatus
 
             let progressParts = []
 
-            if (total_portions && total_portions > 1) {
-                progressParts.push(`Working on ${current_portion || 1} of ${total_portions}`)
+            // Use custom portion label as-is if available, otherwise default format with numbers
+            if (portion_label) {
+                // Just show the portion label as-is
+                progressParts.push(portion_label)
+            } else if (total_portions && total_portions > 1) {
+                if (current_portion == total_portions) {
+                    progressParts.push(`Finishing up`)
+
+                } else {
+                    // Fallback to numbered format only if no custom label
+                    progressParts.push(`Working on ${current_portion || 1} of ${total_portions}`)
+                }
             }
 
-            if (total_steps && total_steps > 0) {
-                progressParts.push(`Task ${current_step || 1} of ${total_steps}`)
+            // Use custom step label as-is if available, otherwise default format with numbers
+            if (step_label) {
+                if (!portion_label) {
+                    // Just show the step label as-is
+                    progressParts.push(step_label)
+                }
+            } else if (total_steps && total_steps > 0) {
+                if (current_step === total_steps) {
+                    progressParts.push(`Finishing task`)
+                } else {
+                    // Fallback to numbered format only if no custom label
+                    progressParts.push(`Task ${current_step || 1} of ${total_steps}`)
+                }
             }
 
+            // If we have custom labels, use them instead of logs
             if (progressParts.length > 0) {
                 return progressParts.join(' • ')
+            }
+
+            // Fall back to recent logs if no custom labels are available
+            if (logs.length > 0) {
+                const latestLog = logs[logs.length - 1]
+                // Only use logs from the last 10 seconds to ensure they're current
+                const logAge = Date.now() - (latestLog.timestamp * 1000)
+                if (logAge < 10000) { // 10 seconds
+                    return latestLog.message
+                }
             }
         }
 
@@ -278,10 +324,10 @@ export default function ScannerControlsClient({ scanners }: ScannerControlsClien
                     <Alert
                         key={alert.id}
                         className={`max-w-sm ${alert.type === 'error'
-                                ? 'border-red-200 bg-red-50 text-red-800'
-                                : alert.type === 'success'
-                                    ? 'border-green-200 bg-green-50 text-green-800'
-                                    : 'border-blue-200 bg-blue-50 text-blue-800'
+                            ? 'border-red-200 bg-red-50 text-red-800'
+                            : alert.type === 'success'
+                                ? 'border-green-200 bg-green-50 text-green-800'
+                                : 'border-blue-200 bg-blue-50 text-blue-800'
                             }`}
                     >
                         {alert.type === 'error' ? (
@@ -306,9 +352,12 @@ export default function ScannerControlsClient({ scanners }: ScannerControlsClien
                             </div>
                             <div>
                                 <CardTitle className="text-base font-semibold">Scan Details</CardTitle>
-                                {scanStatus.scanner_name && (
+                                {(scanStatus.scanner_name || scanStatus.multi_scan) && (
                                     <CardDescription className="text-xs text-gray-600 mt-0.5">
-                                        Running {scanStatus.scanner_name}
+                                        {scanStatus.multi_scan
+                                            ? `Multi-Scan ${scanStatus.current_scanner ? `- Running ${scanStatus.current_scanner}` : ''}`
+                                            : `Running ${scanStatus.scanner_name}`
+                                        }
                                     </CardDescription>
                                 )}
                             </div>
@@ -329,11 +378,79 @@ export default function ScannerControlsClient({ scanners }: ScannerControlsClien
                                     {getStatusBadge(scanStatus.status)}
                                 </div>
 
-                                {scanStatus.scanner_name && (
+                                {(scanStatus.scanner_name || scanStatus.multi_scan || scanAllProgress) && (
                                     <div>
                                         <span className="text-base font-medium text-gray-600">Scanner:</span>
-                                        <div className="mt-1">
-                                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs px-2 py-1">{scanStatus.scanner_name}</Badge>
+                                        <div className="mt-1 space-y-1">
+                                            {scanStatus.multi_scan ? (
+                                                <>
+                                                    {/* Multi-scan display */}
+                                                    {scanStatus.current_scanner && (
+                                                        <div>
+                                                            <Badge variant="default" className="bg-blue-600 text-white border-blue-600 text-xs px-2 py-1 mr-2">
+                                                                {scanStatus.current_scanner} (Running)
+                                                            </Badge>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Show completed scanners from backend */}
+                                                    {scanStatus.scanned_scanners && scanStatus.scanned_scanners.length > 0 && (
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {scanStatus.scanned_scanners.map((scanner) => (
+                                                                <Badge
+                                                                    key={scanner}
+                                                                    variant="outline"
+                                                                    className="bg-green-50 text-green-700 border-green-200 text-xs px-2 py-1"
+                                                                >
+                                                                    {scanner} ✓
+                                                                </Badge>
+                                                            ))}
+                                                        </div>
+                                                    )}
+
+                                                    {/* Show total scanners info */}
+                                                    {(scanStatus.total_portions || scanStatus.scanner_names) && (
+                                                        <div className="text-xs text-gray-500 mt-1">
+                                                            {(scanStatus.scanned_scanners?.length || 0)} of {scanStatus.total_portions || scanStatus.scanner_names?.length || 0} scanners completed
+                                                        </div>
+                                                    )}
+                                                </>
+                                            ) : scanAllProgress ? (
+                                                <>
+                                                    {/* Frontend scan all progress (fallback) */}
+                                                    {scanAllProgress.currentScanner && (
+                                                        <div>
+                                                            <Badge variant="default" className="bg-blue-600 text-white border-blue-600 text-xs px-2 py-1 mr-2">
+                                                                {scanAllProgress.currentScanner} (Running)
+                                                            </Badge>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Show completed scanners */}
+                                                    {scanAllProgress.scannedScanners.length > 0 && (
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {scanAllProgress.scannedScanners.map((scanner) => (
+                                                                <Badge
+                                                                    key={scanner}
+                                                                    variant="outline"
+                                                                    className="bg-green-50 text-green-700 border-green-200 text-xs px-2 py-1"
+                                                                >
+                                                                    {scanner} ✓
+                                                                </Badge>
+                                                            ))}
+                                                        </div>
+                                                    )}
+
+                                                    {/* Show progress summary */}
+                                                    <div className="text-xs text-gray-500 mt-1">
+                                                        {scanAllProgress.current} of {scanAllProgress.total} scanners completed
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs px-2 py-1">
+                                                    {scanStatus.scanner_name}
+                                                </Badge>
+                                            )}
                                         </div>
                                     </div>
                                 )}
@@ -341,7 +458,77 @@ export default function ScannerControlsClient({ scanners }: ScannerControlsClien
 
                             {/* Progress Section */}
                             <div className="space-y-3">
-                                {scanStatus.status === 'running' && (
+                                {scanStatus.multi_scan && scanStatus.status === 'running' ? (
+                                    <>
+                                        {/* Backend Multi-scan Progress */}
+                                        <div>
+                                            <p className="text-base font-medium text-gray-600">Multi-Scan Progress:</p>
+                                            <ProgressBar
+                                                mode="single"
+                                                progress={scanStatus.progress || 0}
+                                                showMarquee={false}
+                                            />
+                                            <p className="text-sm text-gray-500 mt-1">
+                                                {scanStatus.current_portion || 0} of {scanStatus.total_portions || 0} scanners completed
+                                            </p>
+                                        </div>
+
+                                        {/* Individual Scanner Progress (if one is running) */}
+                                        {scanStatus.current_scanner && (
+                                            <div>
+                                                <p className="text-base font-medium text-gray-600">Current Scanner Progress:</p>
+                                                <ProgressBar
+                                                    mode={scanStatus.display_mode === 'dual' ? 'dual' : 'single'}
+                                                    progress={scanStatus.progress_bar || 0}
+                                                    secondaryProgress={scanStatus.progress_bar || 0}
+                                                    showMarquee={!scanStatus.progress_bar || scanStatus.progress_bar <= 0}
+                                                    showSecondaryMarquee={!scanStatus.total_steps || scanStatus.total_steps <= 0}
+                                                    secondaryLabel={scanStatus.step_label || 'Current Task'}
+                                                    secondaryStatus={
+                                                        scanStatus.total_steps && scanStatus.total_steps > 0
+                                                            ? `${scanStatus.progress_bar || 0}%`
+                                                            : 'Processing...'
+                                                    }
+                                                />
+                                            </div>
+                                        )}
+                                    </>
+                                ) : scanAllProgress && scanAllProgress.total > 0 ? (
+                                    <>
+                                        {/* Frontend Scan All Progress (fallback) */}
+                                        <div>
+                                            <p className="text-base font-medium text-gray-600">Scan All Progress:</p>
+                                            <ProgressBar
+                                                mode="single"
+                                                progress={scanAllProgress.total > 0 ? (scanAllProgress.current / scanAllProgress.total) * 100 : 0}
+                                                showMarquee={false}
+                                            />
+                                            <p className="text-sm text-gray-500 mt-1">
+                                                {scanAllProgress.current} of {scanAllProgress.total} scanners completed
+                                            </p>
+                                        </div>
+
+                                        {/* Individual Scanner Progress (if one is running) */}
+                                        {scanAllProgress.currentScanner && scanStatus.status === 'running' && (
+                                            <div>
+                                                <p className="text-base font-medium text-gray-600">Current Scanner Progress:</p>
+                                                <ProgressBar
+                                                    mode={scanStatus.display_mode === 'dual' ? 'dual' : 'single'}
+                                                    progress={scanStatus.progress || 0}
+                                                    secondaryProgress={scanStatus.progress_bar || 0}
+                                                    showMarquee={!scanStatus.progress || scanStatus.progress <= 0}
+                                                    showSecondaryMarquee={!scanStatus.total_steps || scanStatus.total_steps <= 0}
+                                                    secondaryLabel={scanStatus.step_label || 'Current Task'}
+                                                    secondaryStatus={
+                                                        scanStatus.total_steps && scanStatus.total_steps > 0
+                                                            ? `${scanStatus.progress_bar || 0}%`
+                                                            : 'Processing...'
+                                                    }
+                                                />
+                                            </div>
+                                        )}
+                                    </>
+                                ) : scanStatus.status === 'running' && (
                                     <div>
                                         <p className="text-base font-medium text-gray-600">Progress:</p>
                                         <ProgressBar
@@ -350,6 +537,7 @@ export default function ScannerControlsClient({ scanners }: ScannerControlsClien
                                             secondaryProgress={scanStatus.progress_bar || 0}
                                             showMarquee={!scanStatus.progress || scanStatus.progress <= 0}
                                             showSecondaryMarquee={!scanStatus.total_steps || scanStatus.total_steps <= 0}
+                                            secondaryLabel={scanStatus.step_label || 'Current Task'}
                                             secondaryStatus={
                                                 scanStatus.total_steps && scanStatus.total_steps > 0
                                                     ? `${scanStatus.progress_bar || 0}%`
@@ -413,9 +601,9 @@ export default function ScannerControlsClient({ scanners }: ScannerControlsClien
                                             <div ref={logsContainerRef} className="bg-black rounded-lg p-3 font-mono text-xs max-h-48 overflow-y-auto">
                                                 {logs.slice(-50).map((log, index) => (
                                                     <div key={index} className={`mb-1 ${log.level === 'ERROR' ? 'text-red-400' :
-                                                            log.level === 'WARNING' ? 'text-yellow-400' :
-                                                                log.level === 'INFO' ? 'text-green-400' :
-                                                                    'text-gray-300'
+                                                        log.level === 'WARNING' ? 'text-yellow-400' :
+                                                            log.level === 'INFO' ? 'text-green-400' :
+                                                                'text-gray-300'
                                                         }`}>
                                                         <span className="text-gray-500 text-xs mr-2">[{log.timestamp}]</span>
                                                         <span>{log.message}</span>
@@ -493,12 +681,12 @@ export default function ScannerControlsClient({ scanners }: ScannerControlsClien
                             disabled={
                                 !selectedScanner ||
                                 scanStatus.status === 'running' ||
-                                startingScan === selectedScanner ||
+                                currentStartingScan === selectedScanner ||
                                 (connectionState !== 'connected' && connectionState !== 'polling')
                             }
                             className="min-w-[100px]"
                         >
-                            {startingScan === selectedScanner ? (
+                            {currentStartingScan === selectedScanner ? (
                                 <>
                                     <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
                                     Starting...

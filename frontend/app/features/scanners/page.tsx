@@ -1,8 +1,9 @@
 import { Suspense } from 'react'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { ScannersList, getScannersData } from './ScannersList'
-import ScannerControlsClient from './ScannerControlsClient'
+import { Scanner } from './ScannersList'
+import ScannersManager from './ScannersManager'
+import { api } from '@/app/lib/api'
 
 // Server-side rendered page component
 export default async function ScannersPage() {
@@ -20,28 +21,35 @@ export default async function ScannersPage() {
 			</div>
 
 			<div className="space-y-2 container max-w-5xl mx-auto">
-				{/* Client component for dynamic functionality */}
+				{/* Unified scanner management with both controls and list */}
 				<Suspense fallback={
 					<div className="flex items-center justify-center h-64">
 						<RefreshCw className="h-8 w-8 animate-spin text-blue-600" />
-						<span className="ml-2 text-lg">Loading scanner controls...</span>
+						<span className="ml-2 text-lg">Loading scanners...</span>
 					</div>
 				}>
-					<ScannerControlsClient scanners={scanners} />
-				</Suspense>
-
-				{/* Server-rendered scanners list */}
-				<Suspense fallback={
-					<div className="flex items-center justify-center h-32">
-						<RefreshCw className="h-6 w-6 animate-spin text-blue-600" />
-						<span className="ml-2">Loading scanners list...</span>
-					</div>
-				}>
-					<ScannersList scanners={scanners} />
+					<ScannersManager scanners={scanners} />
 				</Suspense>
 			</div>
 		</div>
 	)
+}
+
+// Server action to fetch scanners
+export async function getScannersData(): Promise<Scanner[]> {
+	try {
+		const response = await api.scanners.getScanners()
+
+		if (response.error) {
+			console.error('Failed to load scanners:', response.error)
+			return []
+		}
+
+		return response.data || []
+	} catch (error) {
+		console.error('Error fetching scanners:', error)
+		return []
+	}
 }
 
 // Error boundary component for server-side errors

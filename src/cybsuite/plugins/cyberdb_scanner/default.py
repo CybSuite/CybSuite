@@ -1,4 +1,5 @@
 from cybsuite.cyberdb import BaseCyberDBScanner, Metadata, pm_cyberdb_scanner
+from itertools import tee
 
 
 class DefaultScanner(BaseCyberDBScanner):
@@ -9,9 +10,11 @@ class DefaultScanner(BaseCyberDBScanner):
     )
 
     def do_run(self):
-        scanners = pm_cyberdb_scanner
-        self._set_progress_total_portions(len(scanners))
-        for scaner in scanners.iter(tags=["default"]):
+        scanners = pm_cyberdb_scanner.iter(tags=["default"])
+        scanners, copy = tee(scanners)
+        self.set_progress_total_portions(len(list(copy)))
+        for scaner in scanners:
+            self.set_progress_current_portion_label(f"Running {scaner.name} scanner")
             self.logger.info(f"Running {scaner.name} scanner")
             scanner = scaner(self.cyberdb)
             try:
@@ -19,4 +22,4 @@ class DefaultScanner(BaseCyberDBScanner):
             except Exception as e:
                 self.logger.error(f"Error running {scaner.name} scanner: {e}")
 
-            self._next_progress_portion()
+            self.next_progress_portion()
