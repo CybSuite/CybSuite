@@ -45,11 +45,15 @@ class ServicesVersionScanner(BaseCyberDBScanner):
         self._scan_lm_hash_used()
         self.next_progress_portion()
 
-        self.set_progress_current_portion_label("Checking for credential reuse across AD domains")
+        self.set_progress_current_portion_label(
+            "Checking for credential reuse across AD domains"
+        )
         self._scan_auth_reuse_cross_ad()
         self.next_progress_portion()
 
-        self.set_progress_current_portion_label("Checking for credential reuse across Windows hosts")
+        self.set_progress_current_portion_label(
+            "Checking for credential reuse across Windows hosts"
+        )
         self._scan_auth_reuse_cross_windows()
         self.next_progress_portion()
 

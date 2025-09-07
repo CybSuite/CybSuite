@@ -31,8 +31,8 @@ from .utils import (
     get_empty_field_description,
     get_flattened_columns_from_sample_data,
     map_koalak_type_to_form_type,
-    run_scan_async,
     run_multiple_scans_async,
+    run_scan_async,
 )
 
 # Import the cyberdb_schema (you may need to adjust this import path)
@@ -1511,7 +1511,7 @@ def start_scan(request):
         # Check for both single scanner and multiple scanners formats
         scanner_name = request.data.get("scanner_name")
         scanner_names = request.data.get("scanner_names")
-        
+
         # Handle multiple scanners
         if scanner_names:
             if not isinstance(scanner_names, list) or len(scanner_names) == 0:
@@ -1519,17 +1519,19 @@ def start_scan(request):
                     {"error": "scanner_names must be a non-empty list"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            
+
             # Validate all scanner names exist
             available_scanners = [plugin.name for plugin in pm_cyberdb_scanner]
-            invalid_scanners = [name for name in scanner_names if name not in available_scanners]
-            
+            invalid_scanners = [
+                name for name in scanner_names if name not in available_scanners
+            ]
+
             if invalid_scanners:
                 return Response(
                     {"error": f"Scanners not found: {', '.join(invalid_scanners)}"},
                     status=status.HTTP_404_NOT_FOUND,
                 )
-            
+
             # Get additional scan parameters from request
             scan_kwargs = request.data.get("scan_kwargs", {})
 
@@ -1546,7 +1548,7 @@ def start_scan(request):
                 },
                 status=status.HTTP_202_ACCEPTED,
             )
-        
+
         # Handle single scanner (backward compatibility)
         elif scanner_name:
             # Check if the scanner exists
@@ -1571,10 +1573,12 @@ def start_scan(request):
                 },
                 status=status.HTTP_202_ACCEPTED,
             )
-        
+
         else:
             return Response(
-                {"error": "Either scanner_name (for single scan) or scanner_names (for multi-scan) is required"},
+                {
+                    "error": "Either scanner_name (for single scan) or scanner_names (for multi-scan) is required"
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1651,12 +1655,18 @@ def get_scanners(request):
     for scanner in pm_cyberdb_scanner:
         scanner_info = {"name": scanner.name}
         if scanner.metadata:
-            scanner_info["description"] = scanner.metadata.description if scanner.metadata.description is not None else None
-            scanner_info["tags"] = scanner.metadata.tags if scanner.metadata.tags is not None else []
+            scanner_info["description"] = (
+                scanner.metadata.description
+                if scanner.metadata.description is not None
+                else None
+            )
+            scanner_info["tags"] = (
+                scanner.metadata.tags if scanner.metadata.tags is not None else []
+            )
         else:
             scanner_info["description"] = None
             scanner_info["tags"] = []
-        
+
         db_scanners.append(scanner_info)
 
     return Response(db_scanners)

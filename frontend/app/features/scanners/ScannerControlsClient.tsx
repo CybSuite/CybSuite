@@ -118,7 +118,7 @@ export default function ScannerControlsClient({
             showAlert('info', 'Connecting to real-time updates...')
             resetConnection()
 
-            // Wait for connection attempt - give it a bit more time  
+            // Wait for connection attempt - give it a bit more time
             await new Promise(resolve => setTimeout(resolve, 3000))
 
             // If still not connected after retry, continue anyway but warn user

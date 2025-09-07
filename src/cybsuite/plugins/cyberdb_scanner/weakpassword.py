@@ -102,7 +102,9 @@ class WeakPasswordScanner(BaseCyberDBScanner):
             ),
             ("password", []),
         ]
-        self.set_progress_total_portions(labels=[f"Analysing {t[0]} table" for t in table_names])
+        self.set_progress_total_portions(
+            [f"Analysing {t[0]} table" for t in table_names]
+        )
         for table_name, fields in table_names:
             entries = self.cyberdb.request(table_name, password__isnull=False).exclude(
                 password=""

@@ -1118,7 +1118,9 @@ def run_scan_async(db, pm_cyberdb_scanner, scanner_name, scan_kwargs=None):
                                         "current_step", 0
                                     ),
                                     "total_steps": current_progress.get("total_steps"),
-                                    "portion_label": current_progress.get("portion_label"),
+                                    "portion_label": current_progress.get(
+                                        "portion_label"
+                                    ),
                                     "step_label": current_progress.get("step_label"),
                                     "message": get_progress_message(
                                         scanner_name, current_progress
@@ -1283,10 +1285,10 @@ def run_multiple_scans_async(db, pm_cyberdb_scanner, scanner_names, scan_kwargs=
     """Run multiple scans sequentially in a separate thread with WebSocket status updates"""
     if scan_kwargs is None:
         scan_kwargs = {}
-    
+
     if not scanner_names or len(scanner_names) == 0:
         raise ValueError("No scanner names provided")
-    
+
     # If only one scanner, use the single scan function
     if len(scanner_names) == 1:
         return run_scan_async(db, pm_cyberdb_scanner, scanner_names[0], scan_kwargs)
@@ -1295,10 +1297,10 @@ def run_multiple_scans_async(db, pm_cyberdb_scanner, scanner_names, scan_kwargs=
         all_results = []
         all_scan_details = []
         overall_start_time = datetime.now().isoformat()
-        
+
         try:
             broadcast_func = async_to_sync(ScanStatusBroadcaster.broadcast_status)
-            
+
             # Broadcast multi-scan started
             broadcast_func(
                 {
@@ -1323,12 +1325,12 @@ def run_multiple_scans_async(db, pm_cyberdb_scanner, scanner_names, scan_kwargs=
                     "scanned_scanners": [],
                 }
             )
-            
+
             # Run each scanner sequentially
             for i, scanner_name in enumerate(scanner_names):
                 try:
                     scanner_start_time = datetime.now().isoformat()
-                    
+
                     # Get scanner class and initialize it
                     scanner_class = None
                     for plugin in pm_cyberdb_scanner:
@@ -1340,16 +1342,16 @@ def run_multiple_scans_async(db, pm_cyberdb_scanner, scanner_names, scan_kwargs=
                         raise ValueError(f"Scanner '{scanner_name}' not found")
 
                     scanner_instance = scanner_class(db)
-                    
+
                     # Set up real-time log streaming for current scanner
                     log_handler = WebSocketLogHandler(broadcast_func, scanner_name)
                     scanner_instance.logger.addHandler(log_handler)
                     original_log_level = scanner_instance.logger.level
                     scanner_instance.logger.setLevel(logging.INFO)
-                    
+
                     # Calculate overall progress
                     overall_progress = int((i / len(scanner_names)) * 100)
-                    
+
                     # Broadcast current scanner starting
                     broadcast_func(
                         {
@@ -1375,10 +1377,10 @@ def run_multiple_scans_async(db, pm_cyberdb_scanner, scanner_names, scan_kwargs=
                             "scanned_scanners": [s["name"] for s in all_scan_details],
                         }
                     )
-                    
+
                     # Monitor progress for current scanner
                     scan_complete_event = threading.Event()
-                    
+
                     def progress_monitor():
                         last_progress = None
                         while not scan_complete_event.is_set():
@@ -1390,9 +1392,17 @@ def run_multiple_scans_async(db, pm_cyberdb_scanner, scanner_names, scan_kwargs=
 
                                 # Only broadcast if progress changed
                                 if current_progress != last_progress:
-                                    display_info = get_progress_display_mode(current_progress)
-                                    progress_bar_percentage = calculate_progress_bar_percentage(current_progress)
-                                    overall_progress = int((i / len(scanner_names)) * 100)
+                                    display_info = get_progress_display_mode(
+                                        current_progress
+                                    )
+                                    progress_bar_percentage = (
+                                        calculate_progress_bar_percentage(
+                                            current_progress
+                                        )
+                                    )
+                                    overall_progress = int(
+                                        (i / len(scanner_names)) * 100
+                                    )
 
                                     broadcast_func(
                                         {
@@ -1407,15 +1417,26 @@ def run_multiple_scans_async(db, pm_cyberdb_scanner, scanner_names, scan_kwargs=
                                             "display_mode": "dual",
                                             "current_portion": i + 1,
                                             "total_portions": len(scanner_names),
-                                            "current_step": current_progress.get("current_step", 0),
-                                            "total_steps": current_progress.get("total_steps"),
+                                            "current_step": current_progress.get(
+                                                "current_step", 0
+                                            ),
+                                            "total_steps": current_progress.get(
+                                                "total_steps"
+                                            ),
                                             "portion_label": f"Multi-Scan Progress ({len(scanner_names)} scanners)",
-                                            "step_label": current_progress.get("step_label") or f"Running {scanner_name}",
-                                            "message": get_progress_message(scanner_name, current_progress),
+                                            "step_label": current_progress.get(
+                                                "step_label"
+                                            )
+                                            or f"Running {scanner_name}",
+                                            "message": get_progress_message(
+                                                scanner_name, current_progress
+                                            ),
                                             "results": None,
                                             "error": None,
                                             "multi_scan": True,
-                                            "scanned_scanners": [s["name"] for s in all_scan_details],
+                                            "scanned_scanners": [
+                                                s["name"] for s in all_scan_details
+                                            ],
                                         }
                                     )
                                     last_progress = current_progress.copy()
@@ -1428,36 +1449,40 @@ def run_multiple_scans_async(db, pm_cyberdb_scanner, scanner_names, scan_kwargs=
                                 break
 
                     # Start progress monitoring thread
-                    progress_thread = threading.Thread(target=progress_monitor, daemon=True)
+                    progress_thread = threading.Thread(
+                        target=progress_monitor, daemon=True
+                    )
                     progress_thread.start()
-                    
+
                     # Run the actual scan
                     scan_results = scanner_instance.run(**scan_kwargs)
-                    
+
                     # Signal scan complete for this scanner
                     scan_complete_event.set()
                     progress_thread.join(timeout=1.0)
-                    
+
                     # Clean up log handler
                     scanner_instance.logger.removeHandler(log_handler)
                     scanner_instance.logger.setLevel(original_log_level)
-                    
+
                     # Store results
                     scanner_end_time = datetime.now().isoformat()
-                    formatted_results = format_scan_results(scan_results, scanner_instance)
-                    
+                    formatted_results = format_scan_results(
+                        scan_results, scanner_instance
+                    )
+
                     scan_detail = {
                         "name": scanner_name,
                         "start_time": scanner_start_time,
                         "end_time": scanner_end_time,
                         "status": "completed",
                         "results": formatted_results,
-                        "error": None
+                        "error": None,
                     }
-                    
+
                     all_scan_details.append(scan_detail)
                     all_results.append(formatted_results)
-                    
+
                     # Broadcast scanner completion
                     overall_progress = int(((i + 1) / len(scanner_names)) * 100)
                     broadcast_func(
@@ -1473,8 +1498,16 @@ def run_multiple_scans_async(db, pm_cyberdb_scanner, scanner_names, scan_kwargs=
                             "display_mode": "dual",
                             "current_portion": i + 1,
                             "total_portions": len(scanner_names),
-                            "current_step": scanner_instance.get_progress().get("total_steps", 1) if scanner_instance else 1,
-                            "total_steps": scanner_instance.get_progress().get("total_steps", 1) if scanner_instance else 1,
+                            "current_step": scanner_instance.get_progress().get(
+                                "total_steps", 1
+                            )
+                            if scanner_instance
+                            else 1,
+                            "total_steps": scanner_instance.get_progress().get(
+                                "total_steps", 1
+                            )
+                            if scanner_instance
+                            else 1,
                             "portion_label": f"Multi-Scan Progress ({len(scanner_names)} scanners)",
                             "step_label": f"{scanner_name} completed",
                             "message": f"{scanner_name} completed successfully",
@@ -1484,47 +1517,53 @@ def run_multiple_scans_async(db, pm_cyberdb_scanner, scanner_names, scan_kwargs=
                             "scanned_scanners": [s["name"] for s in all_scan_details],
                         }
                     )
-                    
+
                 except Exception as e:
                     # Handle individual scanner failure
                     scanner_end_time = datetime.now().isoformat()
                     scan_detail = {
                         "name": scanner_name,
-                        "start_time": scanner_start_time if 'scanner_start_time' in locals() else datetime.now().isoformat(),
+                        "start_time": scanner_start_time
+                        if "scanner_start_time" in locals()
+                        else datetime.now().isoformat(),
                         "end_time": scanner_end_time,
                         "status": "failed",
                         "results": None,
-                        "error": str(e)
+                        "error": str(e),
                     }
                     all_scan_details.append(scan_detail)
-                    
+
                     # Clean up on error
-                    if 'scanner_instance' in locals() and scanner_instance:
+                    if "scanner_instance" in locals() and scanner_instance:
                         try:
                             scanner_instance.logger.removeHandler(log_handler)
                             scanner_instance.logger.setLevel(original_log_level)
                         except:
                             pass
-                    
+
                     # Continue with next scanner
                     continue
-            
+
             # All scanners completed
             overall_end_time = datetime.now().isoformat()
-            
+
             # Prepare combined results
             combined_results = {
                 "message": f"Multi-scan completed: {len(all_scan_details)} scanners processed",
                 "summary": {
                     "total_scanners": len(scanner_names),
-                    "successful_scans": len([s for s in all_scan_details if s["status"] == "completed"]),
-                    "failed_scans": len([s for s in all_scan_details if s["status"] == "failed"]),
-                    "scan_details": all_scan_details
+                    "successful_scans": len(
+                        [s for s in all_scan_details if s["status"] == "completed"]
+                    ),
+                    "failed_scans": len(
+                        [s for s in all_scan_details if s["status"] == "failed"]
+                    ),
+                    "scan_details": all_scan_details,
                 },
                 "details": all_results,
                 "multi_scan": True,
             }
-            
+
             broadcast_func(
                 {
                     "status": "completed",
@@ -1548,7 +1587,7 @@ def run_multiple_scans_async(db, pm_cyberdb_scanner, scanner_names, scan_kwargs=
                     "scanned_scanners": [s["name"] for s in all_scan_details],
                 }
             )
-            
+
         except Exception as e:
             # Handle overall multi-scan failure
             overall_end_time = datetime.now().isoformat()

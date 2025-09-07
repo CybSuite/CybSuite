@@ -110,7 +110,7 @@ class CyberDBPluginBaseMixin(CyberDBProgressMixin):
         enable_print_existing_status=None,
         enabe_printing_feed=None,
     ):
-        super().__init__()
+        CyberDBProgressMixin.__init__(self)
 
         if enable_printing is None:
             enable_printing = False
@@ -159,7 +159,6 @@ class CyberDBPluginBaseMixin(CyberDBProgressMixin):
 
         self.track_unprinted_feed_insertions = {}
         self.track_unprinted_controls = {}
-
 
     def alert(self, obs_name, *, _as_control=None, **kwargs):
         """Main function to create new control (could also be created with feed)"""
@@ -285,7 +284,7 @@ class CyberDBPluginBaseMixin(CyberDBProgressMixin):
             raise ValueError(f"Following controls are not in DB {not_in_db}")
 
     def cleanup(self):
-        self.progress.cleanup_progress()
+        self.cleanup_progress()
 
     # =========================== #
     # Methods related to printing #

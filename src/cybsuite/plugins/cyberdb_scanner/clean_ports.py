@@ -10,11 +10,13 @@ class CleanPortsScanner(BaseCyberDBScanner):
     )
 
     def do_run(self):
-        self.set_progress_total_portions(labels=[
-            "Removing hosts with only ports 2000 or 5060",
-            "Removing services with port 2000",
-            "Removing services with port 5060",
-        ])
+        self.set_progress_total_portions(
+            [
+                "Removing hosts with only ports 2000 or 5060",
+                "Removing services with port 2000",
+                "Removing services with port 5060",
+            ]
+        )
         i_removed_hosts = 0
 
         hosts = self.cyberdb.request("host")
