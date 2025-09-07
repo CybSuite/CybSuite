@@ -9,8 +9,19 @@ https://docs.djangoproject.com/en/5.2/howto/deployment/asgi/
 
 import os
 
+from api_v1.routing import websocket_urlpatterns
+from channels.auth import AuthMiddlewareStack
+from channels.routing import ProtocolTypeRouter, URLRouter
 from django.core.asgi import get_asgi_application
 
+# Set default Django settings
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "cybsuite_backend.settings")
 
-application = get_asgi_application()
+# Initialize Django ASGI application early to ensure the AppRegistry
+# is populated before importing code that may import ORM models.
+application = ProtocolTypeRouter(
+    {
+        "http": get_asgi_application(),
+        "websocket": AuthMiddlewareStack(URLRouter(websocket_urlpatterns)),
+    }
+)

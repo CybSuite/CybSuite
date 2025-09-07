@@ -122,3 +122,17 @@
 html, body {
   overflow-x: hidden;
 }
+
+/* Custom marquee animation for progress bars */
+@keyframes marquee {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(calc(400px + 100%));
+  }
+}
+
+.animate-marquee {
+  animation: marquee 2s linear infinite;
+}

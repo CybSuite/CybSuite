@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING
 
 from cybsuite.core.logger import get_logger
 from cybsuite.core.printer import printer
+from cybsuite.cyberdb.cyberdb_progress_mixin import CyberDBProgressMixin
 from cybsuite.utils import log_exception
 from django.forms.models import model_to_dict
 
@@ -95,7 +96,7 @@ class Control:
         )
 
 
-class CyberDBPluginBaseMixin:
+class CyberDBPluginBaseMixin(CyberDBProgressMixin):
     controls = []
 
     def __init__(
@@ -109,6 +110,8 @@ class CyberDBPluginBaseMixin:
         enable_print_existing_status=None,
         enabe_printing_feed=None,
     ):
+        CyberDBProgressMixin.__init__(self)
+
         if enable_printing is None:
             enable_printing = False
         if enabe_printing_feed:
@@ -279,6 +282,9 @@ class CyberDBPluginBaseMixin:
 
         if not_in_db:
             raise ValueError(f"Following controls are not in DB {not_in_db}")
+
+    def cleanup(self):
+        self.cleanup_progress()
 
     # =========================== #
     # Methods related to printing #
