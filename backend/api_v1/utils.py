@@ -313,7 +313,7 @@ def map_koalak_type_to_form_type(field_desc):
         return "number"
     elif annotation is str:
         return "text"  # Use text for string fields to get textarea
-    elif annotation is datetime.datetime:
+    elif annotation is datetime:
         return "datetime"
     elif annotation is datetime.date:
         return "date"
@@ -460,6 +460,7 @@ def filter_data_table_queryset(queryset, table_params, dict_field_names):
                 column = filter_item.get("column")
                 filter_operator = filter_item.get("operator")
                 value = filter_item.get("value")
+                negated = filter_item.get("negated", False)
 
                 if not column or not filter_operator:
                     continue
@@ -483,72 +484,69 @@ def filter_data_table_queryset(queryset, table_params, dict_field_names):
                     continue
 
                 # Build Django ORM filter based on operator
+                filter_q = None
+
                 if filter_operator == "contains":
-                    filter_q_objects.append(Q(**{f"{column}__icontains": value}))
-                elif filter_operator == "does_not_contain":
-                    filter_q_objects.append(~Q(**{f"{column}__icontains": value}))
+                    filter_q = Q(**{f"{column}__icontains": value})
                 elif filter_operator == "is":
-                    filter_q_objects.append(Q(**{f"{column}__iexact": value}))
-                elif filter_operator == "is_not":
-                    filter_q_objects.append(~Q(**{f"{column}__iexact": value}))
-                elif filter_operator == "is_empty":
-                    filter_q_objects.append(
-                        Q(**{f"{column}__isnull": True}) | Q(**{f"{column}__exact": ""})
-                    )
-                elif filter_operator == "is_not_empty":
-                    filter_q_objects.append(
-                        ~Q(**{f"{column}__isnull": True})
-                        & ~Q(**{f"{column}__exact": ""})
+                    # Handle blank value case - if value is empty string, check for null or empty
+                    if value == "":
+                        filter_q = Q(**{f"{column}__isnull": True}) | Q(
+                            **{f"{column}__exact": ""}
+                        )
+                    else:
+                        filter_q = Q(**{f"{column}__iexact": value})
+                elif filter_operator == "is_none":
+                    filter_q = Q(**{f"{column}__isnull": True}) | Q(
+                        **{f"{column}__exact": ""}
                     )
                 elif filter_operator == "equals":
                     if value is not None:
-                        filter_q_objects.append(Q(**{f"{column}__exact": value}))
-                elif filter_operator == "not_equals":
-                    if value is not None:
-                        filter_q_objects.append(~Q(**{f"{column}__exact": value}))
+                        filter_q = Q(**{f"{column}__exact": value})
                 elif filter_operator == "greater_than":
                     if value is not None:
-                        filter_q_objects.append(Q(**{f"{column}__gt": value}))
+                        filter_q = Q(**{f"{column}__gt": value})
                 elif filter_operator == "less_than":
                     if value is not None:
-                        filter_q_objects.append(Q(**{f"{column}__lt": value}))
+                        filter_q = Q(**{f"{column}__lt": value})
                 elif filter_operator == "greater_equal":
                     if value is not None:
-                        filter_q_objects.append(Q(**{f"{column}__gte": value}))
+                        filter_q = Q(**{f"{column}__gte": value})
                 elif filter_operator == "less_equal":
                     if value is not None:
-                        filter_q_objects.append(Q(**{f"{column}__lte": value}))
+                        filter_q = Q(**{f"{column}__lte": value})
                 elif filter_operator == "has_any_of":
                     if isinstance(value, list) and value:
-                        filter_q_objects.append(Q(**{f"{column}__in": value}))
-                elif filter_operator == "has_none_of":
-                    if isinstance(value, list) and value:
-                        filter_q_objects.append(~Q(**{f"{column}__in": value}))
+                        filter_q = Q(**{f"{column}__in": value})
                 elif filter_operator == "is_on":
                     if value:
-                        filter_q_objects.append(Q(**{f"{column}__date": value}))
+                        filter_q = Q(**{f"{column}__date": value})
                 elif filter_operator == "is_before":
                     if value:
-                        filter_q_objects.append(Q(**{f"{column}__lt": value}))
+                        filter_q = Q(**{f"{column}__lt": value})
                 elif filter_operator == "is_after":
                     if value:
-                        filter_q_objects.append(Q(**{f"{column}__gt": value}))
+                        filter_q = Q(**{f"{column}__gt": value})
                 elif filter_operator == "is_between":
                     if (
                         isinstance(value, dict)
                         and value.get("start")
                         and value.get("end")
                     ):
-                        filter_q_objects.append(
-                            Q(
-                                **{
-                                    f"{column}__range": [
-                                        value["start"],
-                                        value["end"],
-                                    ]
-                                }
-                            )
+                        filter_q = Q(
+                            **{
+                                f"{column}__range": [
+                                    value["start"],
+                                    value["end"],
+                                ]
+                            }
                         )
+
+                # Apply negation if needed
+                if filter_q is not None:
+                    if negated:
+                        filter_q = ~filter_q
+                    filter_q_objects.append(filter_q)
 
             # Apply filters with global logic
             if filter_q_objects:
@@ -671,54 +669,85 @@ def apply_extra_field_filters(items, extra_field_filters, global_logic="and"):
             column = filter_config.get("column")
             filter_operator = filter_config.get("operator")
             value = filter_config.get("value")
+            negated = filter_config.get("negated", False)
 
             if not column or not filter_operator:
                 continue
 
             item_value = item.get(column)
 
-            # Apply filter logic
+            # Apply base filter logic
+            filter_result = False
+
             if filter_operator == "contains":
                 if item_value and value:
-                    filter_results.append(str(value).lower() in str(item_value).lower())
+                    filter_result = str(value).lower() in str(item_value).lower()
                 else:
-                    filter_results.append(False)
-            elif filter_operator == "does_not_contain":
-                if item_value and value:
-                    filter_results.append(
-                        str(value).lower() not in str(item_value).lower()
+                    filter_result = False
+            elif filter_operator == "is":
+                # Handle blank value case - if value is empty string, check for null or empty
+                if value == "":
+                    filter_result = not item_value or str(item_value).strip() == ""
+                else:
+                    filter_result = (
+                        str(item_value).lower() == str(value).lower()
+                        if item_value and value
+                        else item_value == value
                     )
-                else:
-                    filter_results.append(True)
-            elif filter_operator == "is" or filter_operator == "equals":
-                filter_results.append(
+            elif filter_operator == "is_none":
+                filter_result = not item_value or str(item_value).strip() == ""
+            elif filter_operator == "equals":
+                filter_result = (
                     str(item_value).lower() == str(value).lower()
                     if item_value and value
                     else item_value == value
                 )
-            elif filter_operator == "is_not" or filter_operator == "not_equals":
-                filter_results.append(
-                    str(item_value).lower() != str(value).lower()
-                    if item_value and value
-                    else item_value != value
-                )
-            elif filter_operator == "is_empty":
-                filter_results.append(not item_value or str(item_value).strip() == "")
-            elif filter_operator == "is_not_empty":
-                filter_results.append(item_value and str(item_value).strip() != "")
+            elif filter_operator == "greater_than":
+                if item_value is not None and value is not None:
+                    try:
+                        filter_result = float(item_value) > float(value)
+                    except (ValueError, TypeError):
+                        filter_result = False
+                else:
+                    filter_result = False
+            elif filter_operator == "less_than":
+                if item_value is not None and value is not None:
+                    try:
+                        filter_result = float(item_value) < float(value)
+                    except (ValueError, TypeError):
+                        filter_result = False
+                else:
+                    filter_result = False
+            elif filter_operator == "greater_equal":
+                if item_value is not None and value is not None:
+                    try:
+                        filter_result = float(item_value) >= float(value)
+                    except (ValueError, TypeError):
+                        filter_result = False
+                else:
+                    filter_result = False
+            elif filter_operator == "less_equal":
+                if item_value is not None and value is not None:
+                    try:
+                        filter_result = float(item_value) <= float(value)
+                    except (ValueError, TypeError):
+                        filter_result = False
+                else:
+                    filter_result = False
             elif filter_operator == "has_any_of":
                 if isinstance(value, list) and value:
-                    filter_results.append(item_value in value)
+                    filter_result = item_value in value
                 else:
-                    filter_results.append(False)
-            elif filter_operator == "has_none_of":
-                if isinstance(value, list) and value:
-                    filter_results.append(item_value not in value)
-                else:
-                    filter_results.append(True)
+                    filter_result = False
             else:
                 # Unknown operator, include item
-                filter_results.append(True)
+                filter_result = True
+
+            # Apply negation if needed
+            if negated:
+                filter_result = not filter_result
+
+            filter_results.append(filter_result)
 
         # Apply global logic
         if filter_results:

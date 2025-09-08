@@ -159,7 +159,7 @@ interface ModelDataTableProps {
 	isObservation?: boolean; // If true, add query param "is_observation=true" when fetching data
 	customDataFetchModelName?: string; // If provided, use this model name for data fetching (will be placed directly in the API call)
 	customViewUrlPrefix?: string; // If provided, use this URL prefix for view navigation (will be concatinated with the record id/pretty_id)
-	customFieldOptionsEntityName? :string; // If provided, use this as an entity name when fetching fields options
+	customFieldOptionsEntityName?: string; // If provided, use this as an entity name when fetching fields options
 }
 
 export default function ModelDataTable({
@@ -478,7 +478,8 @@ export default function ModelDataTable({
 						// Map datetime to date for table filtering compatibility
 						(typeInfo.variant === 'datetime' ? 'date' : typeInfo.variant),
 					options: filterOptions,
-				},
+					nullable: fieldSchema.nullable,
+				} as any, // Use 'as any' to allow custom properties
 				enableColumnFilter:
 					// Enable filtering for:
 					fieldSchema.in_filter_query ||           // Explicitly marked as filterable
