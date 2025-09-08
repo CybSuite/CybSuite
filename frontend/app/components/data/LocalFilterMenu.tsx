@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/combobox";
 import { Root } from "@diceui/combobox";
 import { Filter, Plus, X, ChevronDown } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 interface LocalFilterMenuProps {
     table: any;
@@ -47,6 +48,7 @@ const LocalFilterMenu = React.forwardRef<
                     column: filter.column || '',
                     operator: filter.operator || '',
                     value: filter.value || '',
+                    negated: filter.negated || false,
                 }));
                 setFilters(formattedFilters);
                 setGlobalLogic(currentServerFilters.globalLogic || 'and');
@@ -83,60 +85,53 @@ const LocalFilterMenu = React.forwardRef<
         }
     }, [table, directColumns]);
 
-    // Filter operators based on column type
-    const getFilterOperators = (columnType: string) => {
-        switch (columnType) {
-            case 'text':
-                return [
-                    { value: 'contains', label: 'contains' },
-                    { value: 'does_not_contain', label: 'does not contain' },
-                    { value: 'is', label: 'is' },
-                    { value: 'is_not', label: 'is not' },
-                    { value: 'is_empty', label: 'is empty' },
-                    { value: 'is_not_empty', label: 'is not empty' },
-                ];
-            case 'select':
-                return [
-                    { value: 'has_any_of', label: 'has any of' },
-                    { value: 'has_none_of', label: 'has none of' },
-                    { value: 'is_empty', label: 'is empty' },
-                    { value: 'is_not_empty', label: 'is not empty' },
-                ];
-            case 'multiSelect':
-                return [
-                    { value: 'has_any_of', label: 'has any of' },
-                    { value: 'has_none_of', label: 'has none of' },
-                    { value: 'is_empty', label: 'is empty' },
-                    { value: 'is_not_empty', label: 'is not empty' },
-                ];
-            case 'number':
-            case 'range':
-                return [
-                    { value: 'equals', label: 'equals' },
-                    { value: 'not_equals', label: 'not equals' },
-                    { value: 'greater_than', label: 'greater than' },
-                    { value: 'less_than', label: 'less than' },
-                    { value: 'greater_equal', label: 'greater than or equal' },
-                    { value: 'less_equal', label: 'less than or equal' },
-                    { value: 'is_empty', label: 'is empty' },
-                    { value: 'is_not_empty', label: 'is not empty' },
-                ];
-            case 'date':
-                return [
-                    { value: 'is_on', label: 'is on' },
-                    { value: 'is_before', label: 'is before' },
-                    { value: 'is_after', label: 'is after' },
-                    { value: 'is_between', label: 'is between' },
-                    { value: 'is_empty', label: 'is empty' },
-                    { value: 'is_not_empty', label: 'is not empty' },
-                ];
-            default:
-                return [
-                    { value: 'contains', label: 'contains' },
-                    { value: 'is', label: 'is' },
-                    { value: 'is_empty', label: 'is empty' },
-                ];
+    // Filter operators based on column type (only positive operators, negation handled by toggle)
+    const getFilterOperators = (columnType: string, nullable: boolean = true) => {
+        const baseOperators = (() => {
+            switch (columnType) {
+                case 'text':
+                    return [
+                        { value: 'contains', label: 'contains' },
+                        { value: 'is', label: 'is' },
+                    ];
+                case 'select':
+                    return [
+                        { value: 'has_any_of', label: 'has any of' },
+                    ];
+                case 'multiSelect':
+                    return [
+                        { value: 'has_any_of', label: 'has any of' },
+                    ];
+                case 'number':
+                case 'range':
+                    return [
+                        { value: 'equals', label: 'equals (=)' },
+                        { value: 'greater_than', label: 'greater than (>)' },
+                        { value: 'less_than', label: 'less than (<)' },
+                        { value: 'greater_equal', label: 'greater than or equal (≥)' },
+                        { value: 'less_equal', label: 'less than or equal (≤)' },
+                    ];
+                case 'date':
+                    return [
+                        { value: 'is_on', label: 'is on' },
+                        { value: 'is_before', label: 'is before' },
+                        { value: 'is_after', label: 'is after' },
+                        { value: 'is_between', label: 'is between' },
+                    ];
+                default:
+                    return [
+                        { value: 'contains', label: 'contains' },
+                        { value: 'is', label: 'is' },
+                    ];
+            }
+        })();
+
+        // Add "is none" operator only for nullable columns
+        if (nullable) {
+            baseOperators.push({ value: 'is_none', label: 'is none' });
         }
+
+        return baseOperators;
     };
 
     // Add new filter
@@ -146,6 +141,7 @@ const LocalFilterMenu = React.forwardRef<
             column: '',
             operator: '',
             value: '',
+            negated: false,
         };
         setFilters([...filters, newFilter]);
     };
@@ -168,7 +164,7 @@ const LocalFilterMenu = React.forwardRef<
     const applyFilters = React.useCallback(() => {
         const validFilters = filters.filter(filter =>
             filter.column && filter.operator &&
-            (filter.operator === 'is_empty' || filter.operator === 'is_not_empty' || filter.value !== '')
+            (filter.operator === 'is_none' || filter.value !== '' || (filter.operator === 'is' && filter.value === ''))
         );
 
         if (isServerManaged) {
@@ -222,11 +218,11 @@ const LocalFilterMenu = React.forwardRef<
         const columnType = column?.columnDef?.meta?.variant || 'text';
 
         // Operators that don't need value input
-        if (['is_empty', 'is_not_empty'].includes(filter.operator)) {
+        if (['is_none'].includes(filter.operator)) {
             return null;
         }
 
-        if ((filter.operator === 'has_any_of' || filter.operator === 'has_none_of') &&
+        if (filter.operator === 'has_any_of' &&
             (columnType === 'select' || columnType === 'multiSelect')) {
             const options = column?.columnDef?.meta?.options || [];
             const selectedValues = filter.value || [];
@@ -424,7 +420,8 @@ const LocalFilterMenu = React.forwardRef<
                                                 {(() => {
                                                     const column = filteredColumns.find((col: any) => col.id === filter.column);
                                                     const columnType = column?.columnDef?.meta?.variant || 'text';
-                                                    return getFilterOperators(columnType).map((operator) => (
+                                                    const nullable = column?.columnDef?.meta?.nullable !== false; // Default to true if not specified
+                                                    return getFilterOperators(columnType, nullable).map((operator) => (
                                                         <SelectItem key={operator.value} value={operator.value}>
                                                             {operator.label}
                                                         </SelectItem>
@@ -435,8 +432,22 @@ const LocalFilterMenu = React.forwardRef<
                                     </div>
                                 )}
 
-                                {/* Value Input */}
+                                {/* Negation Toggle */}
                                 {filter.column && filter.operator && (
+                                    <div className="flex-0 space-y-2">
+                                        <span className="block w-full text-center">
+                                            <label className="text-xs font-medium text-muted-foreground">Not</label>
+                                        </span>
+                                        <Switch
+                                            checked={filter.negated}
+                                            onCheckedChange={(checked: any) => updateFilter(filter.id, 'negated', checked)}
+                                            className="h-5 w-8"
+                                        />
+                                    </div>
+                                )}
+
+                                {/* Value Input */}
+                                {filter.column && filter.operator && filter.operator !== "is_none" && (
                                     <div className="flex-2 space-y-2">
                                         {filter.operator === 'is_between' ? (
                                             <label className="text-xs font-medium text-muted-foreground">Date range</label>
