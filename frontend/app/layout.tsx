@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { ServerNavigation } from './components/navigation/ServerNavigation';
-import { ServerSidebar } from './components/navigation/ServerSidebar';
+import { UnifiedServerNavigation, UnifiedServerSidebar } from './components/navigation/UnifiedServerNavigation';
+import { NavigationRoutesProvider } from './components/navigation/NavigationRoutesProvider';
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 
 
@@ -32,24 +32,26 @@ export default function RootLayout({
         <body
           className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         >
-          <div className="min-h-screen bg-background">
-            {/* Navigation Bar */}
-            <ServerNavigation />
+          <NavigationRoutesProvider>
+            <div className="min-h-screen bg-background">
+              {/* Navigation Bar */}
+              <UnifiedServerNavigation />
 
-            {/* Main Content Area */}
-            <div className="flex">
-              {/* Sidebar */}
-              <ServerSidebar />
+              {/* Main Content Area */}
+              <div className="flex">
+                {/* Sidebar */}
+                <UnifiedServerSidebar />
 
-              {/* Main Content */}
-              <main className="flex-1 overflow-auto">
-                <div className="container mx-auto py-6 px-4">
-                  {children}
-                  <div id="combobox-portal-container"></div>
-                </div>
-              </main>
+                {/* Main Content */}
+                <main className="flex-1 overflow-auto">
+                  <div className="container mx-auto py-6 px-4">
+                    {children}
+                    <div id="combobox-portal-container"></div>
+                  </div>
+                </main>
+              </div>
             </div>
-          </div>
+          </NavigationRoutesProvider>
         </body>
       </html>
     </NuqsAdapter>

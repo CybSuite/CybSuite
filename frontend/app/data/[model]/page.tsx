@@ -160,6 +160,7 @@ export default async function ModelPage({ params }: ModelPageProps) {
 						initialPagination={initialPagination}
 						isServerManaged={true}
 						showAddButton
+						showSchemaButton
 					/>
 				</>
 			)}

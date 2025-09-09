@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { EntitySchema } from '../../types/Data';
 import { ScrollToTop } from '../navigation/scroll-to-top';
 import { SchemaFilters } from './schema-filters';
@@ -19,6 +19,9 @@ interface SchemaOverviewProps {
 export function SchemaOverview({ entities, categories, tags }: SchemaOverviewProps) {
     // View state
     const [viewMode, setViewMode] = useState<'list' | 'graph'>('list');
+
+    // Highlighted entity state for scroll-to-entity functionality
+    const [highlightedEntity, setHighlightedEntity] = useState<string | null>(null);
 
     // Filter states
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -87,12 +90,46 @@ export function SchemaOverview({ entities, categories, tags }: SchemaOverviewPro
         }
     };
 
+    // Handle internal scroll (from clicking entity links within the schema page)
+    const handleInternalScroll = (entityName: string) => {
+        // Update highlighted entity for internal scrolling
+        setHighlightedEntity(entityName);
+        // Update URL hash without triggering page reload
+        window.history.replaceState(null, '', `#entity-${entityName}`);
+    };
+
     // Clear all filters
     const clearFilters = () => {
         setSelectedCategories([]);
         setSelectedTags([]);
         setSearchQuery('');
     };
+
+    // Handle URL hash to scroll to specific entity
+    useEffect(() => {
+        const handleHashChange = () => {
+            const hash = window.location.hash;
+            if (hash && hash.startsWith('#entity-')) {
+                const entityName = hash.replace('#entity-', '');
+                setHighlightedEntity(entityName);
+
+                // Set view mode to list if it's currently graph
+                if (viewMode === 'graph') {
+                    setViewMode('list');
+                }
+            }
+        };
+
+        // Handle initial hash on page load
+        handleHashChange();
+
+        // Listen for hash changes
+        window.addEventListener('hashchange', handleHashChange);
+
+        return () => {
+            window.removeEventListener('hashchange', handleHashChange);
+        };
+    }, [viewMode]);
 
     return (
         <div className="space-y-4">
@@ -137,11 +174,12 @@ export function SchemaOverview({ entities, categories, tags }: SchemaOverviewPro
                 <EntityList
                     entities={sortedEntities}
                     filteredEntities={filteredEntities}
-                    highlightedEntity={null}
+                    highlightedEntity={highlightedEntity}
                     hasActiveFilters={hasActiveFilters}
                     onCategoryFilter={addCategoryFilter}
                     onTagFilter={addTagFilter}
                     onClearFilters={clearFilters}
+                    onEntityScroll={handleInternalScroll}
                 />
             ) : (
                 <SchemaGraph

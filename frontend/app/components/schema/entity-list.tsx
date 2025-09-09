@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { EntitySchema } from '../../types/Data';
 import { EntityCard } from './entity-card';
 import { Button } from '../../../components/ui/button';
@@ -14,6 +14,7 @@ interface EntityListProps {
     onCategoryFilter: (category: string) => void;
     onTagFilter: (tag: string) => void;
     onClearFilters: () => void;
+    onEntityScroll?: (entityName: string) => void;
 }
 
 export function EntityList({
@@ -23,12 +24,20 @@ export function EntityList({
     hasActiveFilters,
     onCategoryFilter,
     onTagFilter,
-    onClearFilters
+    onClearFilters,
+    onEntityScroll
 }: EntityListProps) {
     const [highlightedEntityState, setHighlightedEntityState] = useState<string | null>(highlightedEntity);
+    const [processedHighlightedEntity, setProcessedHighlightedEntity] = useState<string | null>(null);
 
     // Handle scrolling to entity and highlighting it
-    const scrollToEntity = (entityName: string) => {
+    const scrollToEntity = (entityName: string, isInternalCall: boolean = false) => {
+        // If this is an internal call (from clicking within the page), notify parent
+        if (isInternalCall && onEntityScroll) {
+            onEntityScroll(entityName);
+            return; // Let parent handle the highlighting via prop changes
+        }
+
         // Try to find the entity in different locations based on screen size and layout
         let element: HTMLElement | null = null;
 
@@ -58,8 +67,24 @@ export function EntityList({
             // Add highlight effect
             setHighlightedEntityState(entityName);
             setTimeout(() => setHighlightedEntityState(null), 2000);
+
+            // Mark this entity as processed to avoid re-triggering
+            setProcessedHighlightedEntity(entityName);
         }
     };
+
+    // Watch for changes in the highlightedEntity prop and trigger scrolling
+    useEffect(() => {
+        if (highlightedEntity && highlightedEntity !== processedHighlightedEntity) {
+            // Scroll to entity after a short delay to ensure components are rendered
+            setTimeout(() => {
+                scrollToEntity(highlightedEntity);
+            }, 100);
+        } else if (!highlightedEntity && processedHighlightedEntity) {
+            // Clear processed entity when parent clears highlighted entity
+            setProcessedHighlightedEntity(null);
+        }
+    }, [highlightedEntity, processedHighlightedEntity]);
 
     // Add category filter handler
     const addCategoryFilter = (category: string) => {
@@ -69,6 +94,11 @@ export function EntityList({
     // Add tag filter handler
     const addTagFilter = (tag: string) => {
         onTagFilter(tag);
+    };
+
+    // Wrapper function for internal scroll calls from EntityCard
+    const handleInternalEntityScroll = (entityName: string) => {
+        scrollToEntity(entityName, true);
     };
 
     if (filteredEntities.length === 0) {
@@ -103,7 +133,7 @@ export function EntityList({
                         isHighlighted={highlightedEntityState === entity.name}
                         onCategoryFilter={addCategoryFilter}
                         onTagFilter={addTagFilter}
-                        onEntityScroll={scrollToEntity}
+                        onEntityScroll={handleInternalEntityScroll}
                         idSuffix="-mobile"
                     />
                 ))}
@@ -118,7 +148,7 @@ export function EntityList({
                         isHighlighted={highlightedEntityState === entity.name}
                         onCategoryFilter={addCategoryFilter}
                         onTagFilter={addTagFilter}
-                        onEntityScroll={scrollToEntity}
+                        onEntityScroll={handleInternalEntityScroll}
                     />
                 ))}
             </div>
@@ -132,7 +162,7 @@ export function EntityList({
                         isHighlighted={highlightedEntityState === entity.name}
                         onCategoryFilter={addCategoryFilter}
                         onTagFilter={addTagFilter}
-                        onEntityScroll={scrollToEntity}
+                        onEntityScroll={handleInternalEntityScroll}
                     />
                 ))}
             </div>

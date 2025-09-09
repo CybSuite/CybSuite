@@ -16,6 +16,7 @@ export default function ControlsLayout({ children }: ControlsLayoutProps) {
 		if (pathname.includes('/execsum')) return 'execsum';
 		if (pathname.includes('/control_definitions') || pathname.includes('/controls/controls')) return 'controls';
 		if (pathname.includes('/observation_definitions') || pathname.includes('/controls/observations')) return 'observations';
+		if (pathname.includes('/reports')) return 'reports';
 		return 'neutral';
 	};
 
@@ -32,6 +33,9 @@ export default function ControlsLayout({ children }: ControlsLayoutProps) {
 			case 'observations':
 				router.push('/controls/observation_definitions');
 				break;
+			case 'reports':
+				router.push('/controls/reports');
+				break;
 		}
 	};
 
@@ -42,6 +46,7 @@ export default function ControlsLayout({ children }: ControlsLayoutProps) {
 					<TabsTrigger value="execsum" className={`px-4 py-2 hover:bg-gray-200/75 transition duration-200 ${activeTab !== "execsum" ? "cursor-pointer" : ""}`}>Executive Summary</TabsTrigger>
 					<TabsTrigger value="controls" className={`px-4 py-2 hover:bg-gray-200/75 transition duration-200 ${activeTab !== "controls" ? "cursor-pointer" : ""}`}>Controls</TabsTrigger>
 					<TabsTrigger value="observations" className={`px-4 py-2 hover:bg-gray-200/75 transition duration-200 ${activeTab !== "observations" ? "cursor-pointer" : ""}`}>Observations</TabsTrigger>
+					<TabsTrigger value="reports" className={`px-4 py-2 hover:bg-gray-200/75 transition duration-200 ${activeTab !== "reports" ? "cursor-pointer" : ""}`}>Reports</TabsTrigger>
 				</TabsList>
 
 				<TabsContent value="execsum" className="mt-6">
@@ -54,6 +59,10 @@ export default function ControlsLayout({ children }: ControlsLayoutProps) {
 
 				<TabsContent value="observations" className="mt-6">
 					{activeTab === 'observations' && children}
+				</TabsContent>
+
+				<TabsContent value="reports" className="mt-6">
+					{activeTab === 'reports' && children}
 				</TabsContent>
 
 				<TabsContent value="neutral" className="mt-6">

@@ -8,6 +8,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuCheckboxItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
     Accordion,
     AccordionContent,
     AccordionItem,
@@ -21,7 +27,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Edit, Trash2, Link2, Hash, Calendar, List, ToggleLeft, CircleQuestionMark, RefreshCw, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Link2, Hash, Calendar, List, ToggleLeft, CircleQuestionMark, RefreshCw, ExternalLink, AlignJustify } from 'lucide-react';
 import Link from 'next/link';
 import { parseFieldAnnotation, getFieldDisplayName } from '@/app/lib/schema-utils';
 import { api } from "@/app/lib/api";
@@ -48,6 +54,9 @@ export default function DetailPageView({ schema, record, model, relatedData, rel
     // Edit state for the edit dialog
     const [editRecord, setEditRecord] = React.useState<EntityRecord | null>(null);
     const [editDialogOpen, setEditDialogOpen] = React.useState(false);
+
+    // Hide none values toggle state (enabled by default)
+    const [hideNoneValues, setHideNoneValues] = React.useState(true);
 
     // Delete confirmation dialog state
     const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
@@ -445,7 +454,7 @@ export default function DetailPageView({ schema, record, model, relatedData, rel
                         <p className="text-sm text-gray-500">{entityDisplayName.replace(/_/g, ' ')} Details</p>
                     </div>
                 </div>
-                <div className="flex space-x-2">
+                <div className="flex items-center space-x-2">
                     <Button variant="outline" size="sm" onClick={handleEdit}>
                         <Edit className="h-4 w-4 mr-2" />
                         Edit
@@ -454,6 +463,21 @@ export default function DetailPageView({ schema, record, model, relatedData, rel
                         <Trash2 className="h-4 w-4 mr-2" />
                         Delete
                     </Button>
+                    <DropdownMenu modal={false}>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                                <AlignJustify className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuCheckboxItem
+                                checked={hideNoneValues}
+                                onCheckedChange={setHideNoneValues}
+                            >
+                                Hide fields with no values
+                            </DropdownMenuCheckboxItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </div>
 
@@ -462,33 +486,68 @@ export default function DetailPageView({ schema, record, model, relatedData, rel
                 <Card className="overflow-hidden">
                     <CardContent className="p-0">
                         <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-gray-100">
-                            {/* Left Column */}
-                            <div className="divide-y divide-gray-100">
-                                {Object.values(schema.fields)
+                            {(() => {
+                                // Filter fields based on hideNoneValues setting
+                                const filteredFields = Object.values(schema.fields)
                                     .filter(field => field.name !== 'id')
-                                    .filter((_, index) => index % 2 === 0) // Even indices (0, 2, 4...)
-                                    .map((field) => {
-                                        return renderFieldRow(field, record);
-                                    })}
-                            </div>
+                                    .filter(field => {
+                                        if (!hideNoneValues) return true;
+                                        const fieldValue = record[field.name];
+                                        const isEmpty = fieldValue === null || fieldValue === undefined ||
+                                            (typeof fieldValue === 'string' && fieldValue.trim() === '') ||
+                                            (Array.isArray(fieldValue) && fieldValue.length === 0);
+                                        return !isEmpty;
+                                    });
 
-                            {/* Right Column */}
-                            <div className="divide-y divide-gray-100">
-                                {Object.values(schema.fields)
-                                    .filter(field => field.name !== 'id')
-                                    .filter((_, index) => index % 2 === 1) // Odd indices (1, 3, 5...)
-                                    .map((field) => {
-                                        return renderFieldRow(field, record);
-                                    })}
-                            </div>
+                                return (
+                                    <>
+                                        {/* Left Column */}
+                                        <div className="divide-y divide-gray-100">
+                                            {filteredFields
+                                                .filter((_, index) => index % 2 === 0) // Even indices (0, 2, 4...)
+                                                .map((field) => {
+                                                    return renderFieldRow(field, record);
+                                                })}
+                                        </div>
+
+                                        {/* Right Column */}
+                                        <div className="divide-y divide-gray-100">
+                                            {filteredFields
+                                                .filter((_, index) => index % 2 === 1) // Odd indices (1, 3, 5...)
+                                                .map((field) => {
+                                                    return renderFieldRow(field, record);
+                                                })}
+                                        </div>
+                                    </>
+                                );
+                            })()}
                         </div>
 
                         {/* Fallback message if no fields to show */}
-                        {Object.values(schema.fields).filter(field => field.name !== 'id').length === 0 && (
-                            <div className="px-6 py-12 text-center text-gray-500 col-span-2">
-                                No field information available for this record.
-                            </div>
-                        )}
+                        {(() => {
+                            const filteredFieldsCount = Object.values(schema.fields)
+                                .filter(field => field.name !== 'id')
+                                .filter(field => {
+                                    if (!hideNoneValues) return true;
+                                    const fieldValue = record[field.name];
+                                    const isEmpty = fieldValue === null || fieldValue === undefined ||
+                                        (typeof fieldValue === 'string' && fieldValue.trim() === '') ||
+                                        (Array.isArray(fieldValue) && fieldValue.length === 0);
+                                    return !isEmpty;
+                                }).length;
+
+                            if (filteredFieldsCount === 0) {
+                                return (
+                                    <div className="px-6 py-12 text-center text-gray-500 col-span-2">
+                                        {hideNoneValues
+                                            ? "All fields are empty. Toggle 'Hide none values' to show empty fields."
+                                            : "No field information available for this record."
+                                        }
+                                    </div>
+                                );
+                            }
+                            return null;
+                        })()}
                     </CardContent>
                 </Card>
             </div>
