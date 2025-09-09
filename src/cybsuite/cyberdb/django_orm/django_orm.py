@@ -2,14 +2,14 @@ import datetime
 import json
 from itertools import chain
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Type
 
 import django.db.models
 import psycopg2
 import psycopg2.sql
 import yaml
 from cybsuite.extension import CybSuiteExtension
-from django.db.models import ForeignKey, Model
+from django.db.models import ForeignKey, ManyToManyField, Model
 from django.forms.models import model_to_dict
 from koalak.descriptions import EntityDescription, FieldDescription, SchemaDescription
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
@@ -26,7 +26,7 @@ class DjangoORMBuilder(AbstractDatabaseBuilder):
     @classmethod
     def build(
         cls, schema: SchemaDescription, *, name: str = None, get_django_models
-    ) -> "DjangoORMDatabase":
+    ) -> Type["DjangoORMDatabase"]:
         if name is None:
             name = "Database"
 
@@ -602,6 +602,8 @@ class DjangoORMDatabase(AbstractDatabase):
 
             if isinstance(f, ForeignKey):
                 value = str(value) if value is not None else None
+            elif isinstance(f, ManyToManyField):
+                value = [str(obj) for obj in value.all()]
 
             data[f.name] = value
 

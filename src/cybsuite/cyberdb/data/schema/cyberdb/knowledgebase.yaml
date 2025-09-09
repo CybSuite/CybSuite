@@ -1,0 +1,16 @@
+description: "Knowledgebase"
+order: 11
+tags: knowledgebase
+fields:
+  name:
+    type: str
+    unique: true
+    indexed: true
+    repr: true
+    max_length: 200
+    in_filter_query: true
+    description: "Unique KB identifier"
+  description:
+    type: str
+    description: "Category purpose and scope"
+    default: null
