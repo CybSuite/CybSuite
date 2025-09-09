@@ -195,8 +195,12 @@ export function createServerApiClient(cookies?: string): ApiClient {
 export const api = {
   // Navigation endpoints
   navigation: {
-    getNavigation: () =>
-      apiClient.get<NavigationResponse>("/api/v1/nav_links/"),
+    getNavigation: (cookies?: string) =>
+      cookies
+        ? createServerApiClient(cookies).get<NavigationResponse>(
+            "/api/v1/nav_links/"
+          )
+        : apiClient.get<NavigationResponse>("/api/v1/nav_links/"),
   },
 
   // Schema endpoints

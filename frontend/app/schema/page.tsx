@@ -34,21 +34,18 @@ export default async function DataPage() {
 		return (
 			<div className="space-y-6">
 				<div>
-					<h1 className="text-3xl font-bold tracking-tight">Data Management</h1>
+					<h1 className="text-3xl font-bold tracking-tight">Schema Overview</h1>
 					<p className="text-muted-foreground">
 						Explore the application schema
 					</p>
 				</div>
 
 				<div className="space-y-8">
-					<div>
-						<h2 className="text-2xl font-semibold mb-4">Schema Overview</h2>
-						<SchemaOverview
-							entities={entities}
-							categories={categories}
-							tags={tags}
-						/>
-					</div>
+					<SchemaOverview
+						entities={entities}
+						categories={categories}
+						tags={tags}
+					/>
 				</div>
 			</div>
 		);

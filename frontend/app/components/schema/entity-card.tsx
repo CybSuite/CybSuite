@@ -1,6 +1,5 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { EntitySchema, FieldSchema } from '../../types/Data';
 import { Badge } from '../../../components/ui/badge';
 import { Button } from '../../../components/ui/button';
@@ -25,6 +24,7 @@ import {
 } from '../../../components/ui/tooltip';
 import { Key, Link2, Hash, Tag, Eye, ExternalLink } from 'lucide-react';
 import { useCallback } from 'react';
+import Link from 'next/link';
 
 interface EntityCardProps {
     entity: EntitySchema;
@@ -43,8 +43,6 @@ export function EntityCard({
     onEntityScroll,
     idSuffix = ''
 }: EntityCardProps) {
-    const router = useRouter();
-
     const getFieldIcon = useCallback((field: FieldSchema) => {
         if (field.unique) return <Key className="h-3 w-3 text-yellow-500" />;
         if (field.referenced_entity) return <Link2 className="h-3 w-3 text-blue-500" />;
@@ -62,16 +60,12 @@ export function EntityCard({
         return <Badge variant="secondary" className="hover:bg-secondary">Unknown</Badge>;
     }, []);
 
-    const navigateToEntityData = useCallback((entityName: string) => {
-        router.push(`/data/${entityName}`);
-    }, [router]);
-
     return (
         <div
             id={`entity-${entity.name}${idSuffix}`}
             className={`rounded-lg border bg-card transition-all duration-500 w-full min-w-0 ${isHighlighted
-                    ? 'animate-pulse scale-105 border-blue-500 shadow-lg'
-                    : ''
+                ? 'animate-pulse transform scale-105 border-blue-500 shadow-lg ring-2 ring-blue-300'
+                : ''
                 }`}
         >
             <Accordion type="single" collapsible className="w-full">
@@ -98,18 +92,16 @@ export function EntityCard({
                                     )}
                                 </div>
                             </div>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 px-3 cursor-pointer"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    navigateToEntityData(entity.name);
-                                }}
-                            >
-                                <Eye className="h-3 w-3 mr-1" />
-                                View Data
-                            </Button>
+                            <Link href={`/data/${entity.name}`}>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 px-3 cursor-pointer"
+                                >
+                                    <Eye className="h-3 w-3 mr-1" />
+                                    View Data
+                                </Button>
+                            </Link>
                             <AccordionTrigger className="hover:no-underline p-4 cursor-pointer"></AccordionTrigger>
                         </div>
                         {entity.tags && entity.tags.length > 0 && (

@@ -19,7 +19,7 @@ import {
 	getFilterOptions,
 	fetchRelationOptions
 } from "@/app/lib/schema-utils";
-import { AlertCircle, RefreshCw, ExternalLink, Trash2 } from "lucide-react";
+import { AlertCircle, RefreshCw, ExternalLink, Trash2, TableProperties } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +32,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import Link from "next/link";
 
 // Helper function to render tags as badges
 const renderTagBadges = (value: any, maxDisplay: number = 3) => {
@@ -155,6 +156,7 @@ interface ModelDataTableProps {
 	showSeeAllButton?: boolean;
 	showRefreshButton?: boolean;
 	showAddButton?: boolean;
+	showSchemaButton?: boolean;
 	isServerManaged?: boolean; // If true, use server-side table management
 	isObservation?: boolean; // If true, add query param "is_observation=true" when fetching data
 	customDataFetchModelName?: string; // If provided, use this model name for data fetching (will be placed directly in the API call)
@@ -174,6 +176,7 @@ export default function ModelDataTable({
 	showSeeAllButton = false,
 	showRefreshButton = true,
 	showAddButton = false,
+	showSchemaButton = false,
 	isServerManaged = false,
 	isObservation = false,
 	customDataFetchModelName = undefined,
@@ -832,6 +835,15 @@ export default function ModelDataTable({
 							<RefreshCw className="h-4 w-4 mr-2" />
 							Refresh
 						</Button>
+					)}
+
+					{showSchemaButton && (
+						<Link href={`/schema#entity-${model}`}>
+							<Button variant="outline" size="lg">
+								<TableProperties className="h-4 w-4 mr-2" />
+								View Schema
+							</Button>
+						</Link>
 					)}
 				</div>
 			</div>
