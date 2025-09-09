@@ -1,0 +1,8 @@
+-   name: cybsuite.pentest.web
+    provider: cybsuite
+    title: CybSuite Pentest Web Workprogram
+    version: 0.0.1
+-   name: cybsuite.conf.windows
+    provider: cybsuite
+    title: CybSuite Windows configuration review Workprogram
+    version: 0.0.1

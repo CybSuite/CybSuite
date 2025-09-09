@@ -15,7 +15,8 @@ packages = [
 # Pour inclure les fichiers de données
 include = [
     { path = "src/cybsuite/cyberdb/data", format = "sdist" },
-    { path = "src/cybsuite/review/data", format = "sdist" }
+    { path = "src/cybsuite/review/data", format = "sdist" },
+    { path = "src/cybsuite/workspace/data", format = "sdist" }
 ]
 
 

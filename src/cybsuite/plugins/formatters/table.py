@@ -14,6 +14,9 @@ class TableFormat(BaseFormatter):
     include_hidden_fields = False
 
     def format(self, data: list[dict], output: TextIO, fields: list[str]) -> None:
+        if not isinstance(data, list):
+            data = list(data)
+
         if not data:
             output.write("No data")
             return

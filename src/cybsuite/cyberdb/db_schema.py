@@ -49,6 +49,30 @@ for cybsuite_extension in CybSuiteExtension.load_extensions():
     )
 
 
+# Check errors
+for entity in cyberdb_schema.filter(tags="knowledgebase"):
+    if entity.name == "knowledgebase":
+        continue
+
+    if "knowledgebase" in entity or "knowledgebase_path" in entity:
+        raise ValueError(
+            f"Entity '{entity.name}' has tag 'knowledgebase' but has manually added fields 'knowledgebase' and/or 'knowledgebase_path' - these should be automatically added when tag 'knowledgebase' is present"
+        )
+
+    entity.add_field(
+        "knowledgebase",
+        type=cyberdb_schema["knowledgebase"],
+        default=None,
+        description="Reference to knowledgebase",
+    )
+    entity.add_field(
+        "knowledgebase_path",
+        type=str,
+        default=None,
+        description="Relative path to knowledgebasebase when exporting",
+    )
+
+
 # TODO: in koalak: fix the mess for updateing schema relations(3 methods is too much)
 cyberdb_schema.update_referenced_entities_from_str()
 cyberdb_schema.update()

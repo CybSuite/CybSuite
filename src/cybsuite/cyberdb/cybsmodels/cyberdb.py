@@ -96,8 +96,10 @@ class CyberDB(BaseCyberDB):
         fields: list = None,
         no_fields: list = None,
         output: str = None,
+        remove_none_fields: bool = None,
         **_filters,
     ) -> Iterable[dict]:
+        # TODO: type annotation of return is wrong, if format is None, we return instances not dicts
         # Ensure no overlapping keys between filters and _filters
         if filters is not None:
             common_keys = set(filters.keys()) & set(_filters.keys())
@@ -131,9 +133,21 @@ class CyberDB(BaseCyberDB):
             fields_names = [f for f in fields_names if f not in no_fields]
 
         # Convert to dict
-        data = [
+        data = (
             self.model_to_dict_with_str_fk(row, fields=fields_names) for row in data
-        ]
+        )
+        if remove_none_fields:
+            nullabled_fields = [f.name for f in entity if f.nullable and not f.required]
+            many_to_many_fields = [f.name for f in entity if f.is_many_to_many_field()]
+            data = (
+                {
+                    k: v
+                    for k, v in row.items()
+                    if not (k in nullabled_fields and v is None)
+                    and not (k in many_to_many_fields and v == [])
+                }
+                for row in data
+            )
 
         # Format the data using the specified formatter
         if output is None:
@@ -254,7 +268,12 @@ class CyberDB(BaseCyberDB):
 
             try:
                 # Write data to file using output parameter
-                self.request(table_name, format="jsonl", output=str(output_file))
+                self.request(
+                    table_name,
+                    format="jsonl",
+                    output=str(output_file),
+                    remove_none_fields=True,
+                )
                 logger.info(f"Exported {table_name} to {output_file}")
                 exported_count += 1
             except Exception as e:

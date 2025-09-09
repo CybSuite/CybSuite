@@ -11,4 +11,7 @@ class YAMLFormat(BaseFormatter):
     metadata = Metadata(description="Format to YAML")
 
     def format(self, data: list[dict], output: TextIO, fields: list[str]) -> None:
-        yaml.dump(data, output)
+        # TODO: find solution without lists that wont crash, and handle millions of rows
+        if not isinstance(data, list):
+            data = list(data)
+        yaml.safe_dump(data, output)
