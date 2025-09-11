@@ -237,7 +237,7 @@ class CyberDB(BaseCyberDB):
     def export_all_tables(self, output_dir: Union[str, Path], force: bool = False):
         """Export all tables data to JSONL files in the specified directory"""
         # TODO: debug it!
-        # TODO: remove None fields (but check it is not required)
+        # TODO: add option to sort? so that in git diff we dont have this
         output_dir = Path(output_dir)
 
         # Check if output directory already exists
