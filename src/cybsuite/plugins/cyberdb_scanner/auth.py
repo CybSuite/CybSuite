@@ -10,7 +10,7 @@ class ServicesVersionScanner(BaseCyberDBScanner):
     )
 
     controls = [
-        "password.reuse",
+        "auth.password.reuse",
         "hash.reuse",
         "windows.lm_hash_used.ad_user",
         "windows.lm_hash_used.windows_user",
@@ -67,7 +67,7 @@ class ServicesVersionScanner(BaseCyberDBScanner):
         self.set_progress_total_steps(len(passwords))
         for password, users in passwords.items():
             self.alert(
-                "password.reuse",
+                "auth.password.reuse",
                 confidence="certain",
                 details={
                     "password": password,

@@ -5,7 +5,7 @@ from cybsuite.review.windows import Metadata, WindowsReviewer
 class RegistriesReviewer(WindowsReviewer):
     name = "registries"
     metadata = Metadata(category="windows", description="Review registries")
-    controls = ["windows:cached_logons_count"]
+    controls = ["windows.cached_logons_count"]
 
     def do_run(self, files):
         registry_value = self.get_windows_registry(
@@ -15,7 +15,7 @@ class RegistriesReviewer(WindowsReviewer):
         cached_logons_count = int(registry_value["CachedLogonsCount"])
 
         control = self.control(
-            "windows:cached_logons_count",
+            "windows.cached_logons_count",
             details={"cached_logons_count": cached_logons_count},
         )
 
@@ -33,7 +33,7 @@ class JucyRegistryReviewer:
         category="windows",
         description="Review juicy registries for passwords and sensitive information",
     )
-    controls = ["windows:juicy_registry"]
+    controls = ["windows.juicy_registry"]
 
     def do_run(self, files):
         keywords = [
@@ -53,7 +53,7 @@ class JucyRegistryReviewer:
                 for keyword in keywords:
                     if keyword in reg_key_lower or keyword in reg_value_lower:
                         self.alert(
-                            "windows:juicy_registry",
+                            "windows.juicy_registry",
                             details={
                                 "registry_path": registry_path,
                                 "registry_key": reg_key,

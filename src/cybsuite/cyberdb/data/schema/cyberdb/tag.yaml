@@ -1,6 +1,6 @@
 description: "Custom labels for data organization"
 pretty_id_fields: "name"
-order: 10
+order: 20
 tags: knowledgebase
 fields:
   name:

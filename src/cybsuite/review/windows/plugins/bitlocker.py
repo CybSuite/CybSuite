@@ -5,7 +5,7 @@ class BitlockerReviewer(WindowsReviewer):
     name = "bitlocker_encryption"
     metadata = Metadata(category="windows", description="Review Bitlocker")
     files = {"bitlocker_volumes": "commands/bitlocker_volumes.json"}
-    controls = ["windows:bitlocker"]
+    controls = ["windows.bitlocker"]
 
     def do_run(self, files):
         bitlocker_volumes_file = files["bitlocker_volumes"]
@@ -14,7 +14,7 @@ class BitlockerReviewer(WindowsReviewer):
             # Check for each volume if Bitlocker is enabled
             mount_point = bitlocker_volume["MountPoint"]
             control = self.control(
-                "windows:bitlocker",
+                "windows.bitlocker",
                 details={"mount_point": mount_point},
             )
 

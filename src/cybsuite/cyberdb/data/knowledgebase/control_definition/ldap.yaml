@@ -1,0 +1,5 @@
+- atomic: true
+  compliances:
+  - cybsuite.pentest.ad
+  name: ldap.anonymous
+  severity: medium

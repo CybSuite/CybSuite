@@ -1,0 +1,42 @@
+- control_definition: dns.dkim_disabled
+  title: DNS DKIM disabled
+  description: "DKIM (DomainKeys Identified Mail) is an email authentication protocol that allows a domain to attach a cryptographic signature to its messages. This signature is added to the email header and allows the receiving server to verify that the email has not been modified in transit and that it actually comes from the declared domain."
+  lang: en
+  risk: "An attacker could intercept an email and attempt to modify it, but if DKIM is properly configured, these modifications would be detected, and the message would be considered non-authentic. However, if the DKIM configuration is incorrect or if the private key is compromised, the attacker could sign fraudulent emails that would appear authentic."
+  recommendation: "Enable DKIM"
+- control_definition: dns.dmarc_disabled
+  title: DNS DMARC Disabled
+  description: "DMARC (Domain-based Message Authentication, Reporting & Conformance) is a protocol that allows domain owners to indicate to mail servers how to handle emails that fail SPF and DKIM verifications. DMARC helps protect against identity spoofing by specifying whether unauthenticated emails should be quarantined, rejected, or accepted with a report sent to the domain owner."
+  lang: en
+  risk: "An attacker could attempt to send fraudulent emails by spoofing a domain. If the domain does not have a properly configured SPF record, these emails could pass as legitimate, allowing the attacker to carry out phishing or spam attacks without being detected."
+  recommendation: "Enable DMARC"
+- control_definition: dns.domain_expiration_is_short
+  title: Domain expiration is short
+  description: "Domain registration expires soon"
+  lang: en
+  risk: "An attacker could takeover the domain if it's not renewed in time, this could happen if you have issues with the payment method during renew."
+  recommendation: "Have at least 2 years of renew for principal domains, if you are big enterprise, you can go to 10 years."
+- control_definition: dns.domain_privacy_disabled
+  title: DNS domain privacy disabled
+  description: "Domain privacy protection is disabled"
+  lang: en
+  risk: "Personal information is publicly visible in WHOIS"
+  recommendation: "Enable domain privacy"
+- control_definition: dns.email_account_not_secured
+  title: Email account not secured
+  description: "Principal account must be secured"
+  lang: en
+  risk: "Email account is vulnerable to unauthorized access"
+  recommendation: "Secure email account"
+- control_definition: dns.registrar_lock_disabled
+  title: DNS registrar lock disabled
+  description: "Domain registrar lock is disabled"
+  lang: en
+  risk: "Domain can be transferred without authorization"
+  recommendation: "Enable registrar lock"
+- control_definition: dns.spf_disabled
+  title: DNS SPF Disabled
+  description: "SPF (Sender Policy Framework) is a DNS record that specifies which mail servers are authorized to send emails on behalf of a domain. It helps prevent email spoofing by allowing receiving mail servers to verify that incoming emails actually come from authorized sources. When SPF is not configured, there is no mechanism to validate the authenticity of emails claiming to be from the domain."
+  lang: en
+  risk: "Without SPF protection, attackers can easily spoof emails from your domain, making it appear as if malicious emails are coming from your organization. This can lead to successful phishing attacks, damage to your domain's reputation, and potential blacklisting by email providers."
+  recommendation: "Enable SPF"

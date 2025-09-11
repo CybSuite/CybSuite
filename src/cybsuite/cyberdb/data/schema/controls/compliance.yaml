@@ -1,5 +1,6 @@
 description: "Security compliance frameworks and their control requirements"
 tags: knowledgebase
+order: 10
 extra:
   web_menu: knowledgebase
 fields:

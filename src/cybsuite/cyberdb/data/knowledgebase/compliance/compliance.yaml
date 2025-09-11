@@ -6,3 +6,11 @@
     provider: cybsuite
     title: CybSuite Windows configuration review Workprogram
     version: 0.0.1
+-   name: cybsuite.pentest.ad
+    provider: cybsuite
+    title: CybSuite Pentest Active Directory Workprogram
+    version: 0.0.1
+-   name: cybsuite.dns
+    provider: cybsuite
+    title: CybSuite DNS configuration review Workprogram
+    version: 0.0.1

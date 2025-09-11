@@ -15,7 +15,7 @@ def test_plugin_bitlocker(new_cyberdb):
         {"bitlocker_volumes": get_data_path("bitlocker_volumes.json")}
     )
 
-    controls = new_cyberdb.get_controls("windows:bitlocker")
+    controls = new_cyberdb.get_controls("windows.bitlocker")
     assert len(controls) == 1
 
     control = controls[0]

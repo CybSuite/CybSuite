@@ -1,0 +1,10 @@
+- atomic: true
+  compliances:
+  - cybsuite.conf.windows
+  name: os.not_updated
+  severity: major
+- atomic: true
+  compliances:
+  - cybsuite.conf.windows
+  name: os.updates_are_not_regular
+  severity: medium

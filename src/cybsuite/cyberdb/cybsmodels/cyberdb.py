@@ -4,13 +4,14 @@ from io import StringIO
 from pathlib import Path
 from typing import Iterable, List, Union
 
+import yaml
 from cybsuite.core.logger import get_logger
 from cybsuite.cyberdb.db_schema import cyberdb_schema
 
 from ..bases.base_cyberdb_scanner import pm_cyberdb_scanner
 from ..bases.base_formatter import pm_formatters
 from ..bases.base_ingestor import pm_ingestors
-from ..consts import PATH_KNOWLEDGEBASE
+from ..consts import KNOWLEDGEBASE_NAME, PATH_KNOWLEDGEBASE
 from .models import BaseCyberDB
 
 logger = get_logger()
@@ -31,18 +32,6 @@ class CyberDB(BaseCyberDB):
         for entity in cyberdb_schema:
             if "knowledgebase" not in entity.tags:
                 self.clear_one_model(entity.name)
-
-    def save_knowledgebase(self, folderpath: str):
-        self.save_models(folderpath, tags="knowledgebase")
-
-    def save_no_knowledgebase(self, folderpath: str):
-        self.save_models(folderpath, tags__ne="knowledgebase")
-
-    def feed_knowledgebase(self, folderpath: str):
-        self.feed_models(folderpath, tags="knowledgebase")
-
-    def init_knowledgebase(self):
-        self.feed_knowledgebase(PATH_KNOWLEDGEBASE)
 
     @classmethod
     def from_default_config(cls) -> "CyberDB":
@@ -96,7 +85,9 @@ class CyberDB(BaseCyberDB):
         fields: list = None,
         no_fields: list = None,
         output: str = None,
-        remove_none_fields: bool = None,
+        remove_empty_fields: bool = None,
+        order_by=None,
+        as_dict: bool = None,
         **_filters,
     ) -> Iterable[dict]:
         # TODO: type annotation of return is wrong, if format is None, we return instances not dicts
@@ -108,24 +99,20 @@ class CyberDB(BaseCyberDB):
             _filters.update(filters)
 
         data = super().request(_model_name, **_filters)
+        if order_by is not None:
+            data = data.order_by(order_by)
         if skip is not None:
             data = data[skip:]
         if limit is not None:
             data = data[:limit]
 
-        if format is None:
+        if format is None and not as_dict:
             return data
 
         # Get entity schema to determine fields
         entity = self.schema[_model_name]
-        # Get field names based on formatter settings
-        formatter = pm_formatters[format]()
         fields_objects = [f for f in entity if not f.is_linked_by_related_name]
-        if not formatter.include_hidden_fields:
-            fields_names = [f.name for f in fields_objects if not f.hidden_in_list]
-        else:
-            fields_names = [f.name for f in fields_objects]
-
+        fields_names = [f.name for f in fields_objects]
         # Include or exclude fields
         if fields is not None:
             fields_names = [f for f in fields_names if f in fields]
@@ -136,7 +123,7 @@ class CyberDB(BaseCyberDB):
         data = (
             self.model_to_dict_with_str_fk(row, fields=fields_names) for row in data
         )
-        if remove_none_fields:
+        if remove_empty_fields:
             nullabled_fields = [f.name for f in entity if f.nullable and not f.required]
             many_to_many_fields = [f.name for f in entity if f.is_many_to_many_field()]
             data = (
@@ -149,6 +136,18 @@ class CyberDB(BaseCyberDB):
                 for row in data
             )
 
+        if as_dict:
+            # TODO: test as dict with none and ...
+            return data
+
+        # Get field names based on formatter settings
+        formatter = pm_formatters[format]()
+        if not formatter.include_hidden_fields:
+            fields_names = [
+                f.name
+                for f in fields_objects
+                if not f.hidden_in_list and f.name in fields_names
+            ]
         # Format the data using the specified formatter
         if output is None:
             output = StringIO()
@@ -272,7 +271,7 @@ class CyberDB(BaseCyberDB):
                     table_name,
                     format="jsonl",
                     output=str(output_file),
-                    remove_none_fields=True,
+                    remove_empty_fields=True,
                 )
                 logger.info(f"Exported {table_name} to {output_file}")
                 exported_count += 1
@@ -285,3 +284,230 @@ class CyberDB(BaseCyberDB):
         logger.info(
             f"Export completed: {exported_count} tables exported, {empty_count} empty tables skipped"
         )
+
+    def export_knowledgebase(
+        self, kb_name: str, export_path: Union[str, Path], *, force: bool = False
+    ):
+        """Export a specific knowledge base to a directory structure"""
+        export_path = Path(export_path)
+
+        # TODO: Replace with actual knowledge base list
+        valid_kbs = [KNOWLEDGEBASE_NAME]
+        if kb_name not in valid_kbs:
+            raise ValueError(
+                f"Knowledge base '{kb_name}' not found. Valid knowledge bases: {valid_kbs}"
+            )
+
+        # Check if export directory already exists
+        if export_path.exists():
+            if force:
+                import shutil
+
+                shutil.rmtree(export_path)
+                logger.info(f"Removed existing directory: {export_path}")
+            else:
+                raise FileExistsError(
+                    f"Export directory '{export_path}' already exists. Use --force to remove it."
+                )
+
+        # Create export directory
+        export_path.mkdir(parents=True, exist_ok=True)
+
+        # Iterate through schema tables with knowledgebase tag
+        for entity in cyberdb_schema.filter(tags="knowledgebase"):
+            table_name = entity.name
+
+            # Skip the knowledgebase table itself
+            if table_name == "knowledgebase":
+                continue
+
+            # Pass the export path and table name to the export function
+            try:
+                self._export_kb_one_table(table_name, kb_name, export_path)
+            except Exception as e:
+                logger.error(
+                    f"Error exporting table '{table_name}': {type(e).__name__} - {str(e)}"
+                )
+                raise e
+                continue
+
+        logger.info(f"Knowledge base '{kb_name}' export completed to: {export_path}")
+
+    def _export_kb_one_table(self, table_name: str, kb_name: str, export_path: Path):
+        """Export a single table for a knowledge base"""
+        from itertools import groupby
+
+        # Check if there are any entries to export
+        if self.is_empty(table_name):
+            logger.info(f"Skipping table '{table_name}' - no data found")
+            return
+
+        # Create table directory only if we have data to export
+        table_dir = export_path / table_name
+        table_dir.mkdir(parents=True, exist_ok=True)
+
+        # Get all entries for this table with the specific knowledge base
+        entries = self.request(
+            table_name,
+            knowledgebase__name=kb_name,
+            order_by="knowledgebase_path",
+            remove_empty_fields=True,
+            as_dict=True,
+        )
+
+        # TODO: what if we have None what file we do put? we will have collision?
+
+        # Sort by path for groupby to work properly
+        grouped_entries = groupby(entries, key=lambda x: x["knowledgebase_path"])
+
+        exported_count = 0
+
+        entity_description = cyberdb_schema[table_name]
+
+        # Get fields with in_filter_query for sorting
+        filter_query_fields = [
+            field.name for field in entity_description.get_in_filter_query_attributes()
+        ]
+
+        def sort_key(e):
+            out = []
+            for k in filter_query_fields:
+                v = e.get(k)
+                out.append((0, v) if v is not None else (1,))
+            return tuple(out)
+
+        for path, group_entries in grouped_entries:
+            # TODO: better handling of unsafe paths
+            if ".." in path:
+                logger.warning(f"Skipping entry with unsafe path: {path}")
+                continue
+
+            path = table_dir / f"{path}.yaml"
+            path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Sort the group entries by in_filter_query fields
+            group_entries = list(group_entries)
+
+            group_entries.sort(key=sort_key)
+
+            # Sort each entry's fields by entity field order
+            for entry in group_entries:
+                entry.pop("knowledgebase_path")
+                entry.pop("knowledgebase")
+
+                # Keys are already ordred, since we take by default the order of the schema when converting to dict
+
+            exported_count += len(group_entries)
+
+            with open(path, "w") as f:
+                yaml.safe_dump(group_entries, f, allow_unicode=True, sort_keys=False)
+
+        logger.info(
+            f"Exported {exported_count} entries from table '{table_name}' to {table_dir}"
+        )
+
+    def import_knowledgebase(self, path: Union[str, Path], *, name: str = None):
+        """Import a knowledge base from a directory structure"""
+        # TODO: generated with IA, not seen yet
+        kb_name = name
+        del name
+        import_path = Path(path)
+        if not import_path.is_dir():
+            raise ValueError(
+                f"Import path '{import_path}' is not a directory or does not exist"
+            )
+
+        # Get all subdirectories (each represents a table)
+        table_dirs = [d for d in import_path.iterdir() if d.is_dir()]
+        imported_count = 0
+        skipped_count = 0
+
+        # Iterate through each table directory
+        for table_dir in table_dirs:
+            table_name = table_dir.name
+
+            # Check if the table has the knowledgebase tag
+            if table_name not in cyberdb_schema:
+                logger.warning(f"Table '{table_name}' not found in schema, skipping")
+                skipped_count += 1
+                continue
+
+            entity = cyberdb_schema[table_name]
+            if "knowledgebase" not in entity.tags:
+                logger.warning(
+                    f"Table '{table_name}' does not have 'knowledgebase' tag, skipping"
+                )
+                skipped_count += 1
+                continue
+
+            # Skip the knowledgebase table itself
+            if table_name == "knowledgebase":
+                logger.info(
+                    f"Skipping table '{table_name}' - cannot import knowledgebase table itself"
+                )
+                skipped_count += 1
+                continue
+
+            try:
+                self._import_kb_one_table(table_name, table_dir, kb_name)
+                imported_count += 1
+            except Exception as e:
+                logger.error(
+                    f"Error importing table '{table_name}': {type(e).__name__} - {str(e)}"
+                )
+                skipped_count += 1
+                continue
+
+        logger.info(
+            f"Knowledge base import completed: {imported_count} tables imported, {skipped_count} tables skipped"
+        )
+
+    def _import_kb_one_table(self, table_name: str, table_dir: Path, kb_name: str):
+        # TODO: remove old KB methods
+        """Import a single table for a knowledge base from YAML files"""
+        imported_count = 0
+
+        # Iterate recursively through all YAML files
+        for yaml_file in table_dir.rglob("*.yaml"):
+            try:
+                # Read YAML file
+                with open(yaml_file, "r", encoding="utf-8") as f:
+                    data = yaml.safe_load(f)
+
+                # Handle both single entries and lists of entries
+                if not isinstance(data, list):
+                    data = [data]
+
+                # Process each entry
+                for entry in data:
+                    if not isinstance(entry, dict):
+                        logger.warning(f"Skipping non-dict entry in {yaml_file}")
+                        continue
+
+                    # Add knowledgebase reference
+                    entry["knowledgebase"] = kb_name
+
+                    # Calculate knowledgebase_path from file path
+                    # Remove table_dir prefix and .yaml extension
+                    relative_path = yaml_file.relative_to(table_dir)
+                    knowledgebase_path = str(relative_path.with_suffix(""))
+
+                    # Add knowledgebase_path
+                    entry["knowledgebase_path"] = knowledgebase_path
+                    # Feed the entry to the database
+                    self.feed(table_name, **entry)
+                    imported_count += 1
+
+            except Exception as e:
+                logger.error(
+                    f"Error importing from {yaml_file}: {type(e).__name__} - {str(e)}"
+                )
+                continue
+
+        if imported_count > 0:
+            logger.info(f"Imported {imported_count} entries from table '{table_name}'")
+        else:
+            logger.warning(f"No entries imported from table '{table_name}'")
+
+    def load_knowledgebase(self):
+        self.import_knowledgebase(PATH_KNOWLEDGEBASE, name=KNOWLEDGEBASE_NAME)
