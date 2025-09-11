@@ -67,11 +67,21 @@ class BloodhoundIngestor(BaseIngestor):
 
             data = json.load(f)
             for user in data["data"]:
+
                 props = user["Properties"]
+                domain = props["domain"].lower()
+                name = props["name"].lower()
+                if "@" in name:
+                    name, domain2 = name.split("@")
+                    if domain2 != domain:
+                        # TODO: add error silently
+                        raise ValueError(
+                            f"Domain mismatch in name and domain properties: {name} {domain} {domain2}"
+                        )
 
                 metadata = {
-                    "name": props["name"].lower(),
-                    "domain": props["domain"].lower(),
+                    "name": name,
+                    "domain": domain,
                     "enabled": props.get("enabled"),
                     "pwd_last_set": props.get("pwdlastset"),
                     "email": props.get("email"),

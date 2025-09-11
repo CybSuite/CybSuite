@@ -11,7 +11,7 @@ _cyberdb = None
 
 def get_db_config():
     """Get the database configuration from by priority: environment, config file, default."""
-    temp_db_name = "_cybsuite_cyberdb_"
+    temp_db_name = "_cybsuite_cyberdb_unittest_"
     user = os.environ.get("CYBSUITE_DB_USER", cyberdb_config["user"])
     password = os.environ.get("CYBSUITE_DB_PASSWORD", cyberdb_config["password"])
     host = os.environ.get("CYBSUITE_DB_HOST", cyberdb_config["host"])
