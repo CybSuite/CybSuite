@@ -1,0 +1,6 @@
+- atomic: true
+  compliances:
+  - cybsuite.pentest.web
+  name: certificate.wildcard
+  tags:
+  - web

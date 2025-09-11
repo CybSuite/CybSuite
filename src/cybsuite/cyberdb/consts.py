@@ -6,6 +6,7 @@ _here_path = Path(__file__).parent
 PATH_DATA = _here_path / "data"
 PATH_DB_SCHEMA = PATH_DATA / "schema"
 PATH_KNOWLEDGEBASE = PATH_DATA / "knowledgebase"
+KNOWLEDGEBASE_NAME = "cybsuite"
 # PATH_DB_ARCHITECTURE
 
 SSMODELS_MODULE_NAME = "cybsuite.cyberdb.cybsmodels"

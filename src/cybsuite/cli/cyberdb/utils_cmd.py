@@ -11,6 +11,7 @@ CMD_GROUP_PLUGINS = "plugins"
 CMD_GROUP_OTHERS = "others"
 CMD_GROUP_UTILS = "utils"
 CMD_GROUP_DELETE = "group_delete"
+CMD_GROUP_KNOWLEDGEBASE = "knowledgebase"
 
 
 def print_ingestors_table():

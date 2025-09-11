@@ -8,7 +8,7 @@ class HotFixReviewer(WindowsReviewer):
     name = "hotfix"
     metadata = Metadata(category="windows", description="Review Get-Hotfix")
     files = {"hotfix": "commands/hotfix.json"}
-    controls = ["os:not_updated", "os:updates_are_not_regular"]
+    controls = ["os.not_updated", "os.updates_are_not_regular"]
 
     # Private regex pattern for the date format \/Date(1234567890)\/
     _DATE_PATTERN = re.compile(r"\/Date\((\d+)\)\/")
@@ -57,7 +57,7 @@ class HotFixReviewer(WindowsReviewer):
             if delta_days > 90:
                 # TODO: change .alert to .control
                 self.alert(
-                    "os:not_updated",
+                    "os.not_updated",
                     details={
                         "days": delta_days,
                         # FIXME: makeit as a date and not a str
@@ -81,7 +81,7 @@ class HotFixReviewer(WindowsReviewer):
             delta_days = (date_i - date_j).days
             if delta_days > 90:
                 self.alert(
-                    "os:updates_are_not_regular",
+                    "os.updates_are_not_regular",
                     details={
                         # FIXME: makeit as a date and not a str
                         "kb_01": str(security_update_j["HotFixID"]),

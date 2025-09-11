@@ -1,0 +1,42 @@
+- control_definition: dns.dkim_disabled
+  title: DNS DKIM désactivé
+  description: "DKIM (DomainKeys Identified Mail) est un protocole d'authentification des emails qui permet à un domaine d'attacher une signature cryptographique à ses messages. Cette signature est ajoutée dans l'en-tête de l'email et permet au serveur récepteur de vérifier que l'email n'a pas été modifié en transit et qu'il provient bien du domaine déclaré."
+  lang: fr
+  risk: "Un attaquant pourrait intercepter un email et tenter de le modifier, mais si DKIM est correctement configuré, ces modifications seraient détectées, et le message serait considéré comme non authentique. Cependant, si la configuration de DKIM est incorrecte ou si la clé privée est compromise, l'attaquant pourrait signer des emails frauduleux qui paraîtraient authentiques."
+  recommendation: "Activer DKIM"
+- control_definition: dns.dmarc_disabled
+  title: DNS DMARC désactivé
+  description: "DMARC (Domain-based Message Authentication, Reporting & Conformance) est un protocole qui permet aux propriétaires de domaines d'indiquer aux serveurs de messagerie comment traiter les emails qui échouent les vérifications SPF et DKIM. DMARC aide à protéger contre les usurpations d'identité en spécifiant si les emails non authentifiés doivent être mis en quarantaine, rejetés, ou acceptés avec un rapport envoyé au propriétaire du domaine."
+  lang: fr
+  risk: "Un attaquant pourrait tenter d'envoyer des emails frauduleux en usurpant un domaine. Si le domaine n'a pas un enregistrement SPF correctement configuré, ces emails pourraient passer pour légitimes, permettant à l'attaquant de mener des attaques de phishing ou de spam sans être détecté."
+  recommendation: "Activer DMARC"
+- control_definition: dns.domain_expiration_is_short
+  title: Expiration du domaine proche
+  description: "L'enregistrement du domaine expire bientôt"
+  lang: fr
+  risk: "Un attaquant pourrait s'emparer du domaine s'il n'est pas renouvelé à temps, cela pourrait arriver si vous avez des problèmes avec le mode de paiement lors du renouvellement."
+  recommendation: "Avoir au moins 2 ans de renouvellement pour les domaines principaux, si vous êtes une grande entreprise, vous pouvez aller jusqu'à 10 ans."
+- control_definition: dns.domain_privacy_disabled
+  title: Confidentialité du domaine DNS désactivée
+  description: "La protection de la confidentialité du domaine est désactivée"
+  lang: fr
+  risk: "Les informations personnelles sont visibles publiquement dans WHOIS"
+  recommendation: "Activer la confidentialité du domaine"
+- control_definition: dns.email_account_not_secured
+  title: Compte email non sécurisé
+  description: "Le compte principal doit être sécurisé"
+  lang: fr
+  risk: "Le compte email est vulnérable aux accès non autorisés"
+  recommendation: "Sécuriser le compte email"
+- control_definition: dns.registrar_lock_disabled
+  title: Verrou du registraire DNS désactivé
+  description: "Le verrou du registraire de domaine est désactivé"
+  lang: fr
+  risk: "Le domaine peut être transféré sans autorisation"
+  recommendation: "Activer le verrou du registraire"
+- control_definition: dns.spf_disabled
+  title: DNS SPF désactivé
+  description: "SPF (Sender Policy Framework) est un enregistrement DNS qui spécifie quels serveurs de messagerie sont autorisés à envoyer des emails au nom d'un domaine. Il aide à prévenir l'usurpation d'email en permettant aux serveurs de messagerie récepteurs de vérifier que les emails entrants proviennent réellement de sources autorisées. Lorsque SPF n'est pas configuré, il n'y a aucun mécanisme pour valider l'authenticité des emails prétendant provenir du domaine."
+  lang: fr
+  risk: "Sans protection SPF, les attaquants peuvent facilement usurper des emails de votre domaine, donnant l'impression que des emails malveillants proviennent de votre organisation. Cela peut conduire à des attaques de phishing réussies, des dommages à la réputation de votre domaine, et un potentiel blacklistage par les fournisseurs d'email."
+  recommendation: "Activer SPF"

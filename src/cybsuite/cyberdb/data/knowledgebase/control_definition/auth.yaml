@@ -1,0 +1,10 @@
+- atomic: true
+  compliances:
+  - cybsuite.pentest.ad
+  name: auth.password.reuse
+  severity: medium
+- atomic: true
+  compliances:
+  - cybsuite.pentest.ad
+  name: auth.password.weak
+  severity: high

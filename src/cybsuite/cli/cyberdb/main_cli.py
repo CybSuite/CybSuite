@@ -11,6 +11,10 @@ from .cmd_cleardb import add_cli_cleardb
 from .cmd_clearmodel import add_cli_clearmodel
 from .cmd_export import add_cli_export
 from .cmd_ingest import add_cli_ingest
+from .cmd_kb_clear import add_cli_kb_clear
+from .cmd_kb_export import add_cli_kb_export
+from .cmd_kb_feed import add_cli_kb_feed
+from .cmd_kb_load import add_cli_kb_load
 from .cmd_makemigrations import add_cli_makemigrations
 from .cmd_migrate import add_cli_migrate
 from .cmd_report import add_cli_report
@@ -21,6 +25,7 @@ from .cmd_stats import add_cli_stats
 from .cmdi_list import add_cli_list
 from .utils_cmd import (
     CMD_GROUP_DELETE,
+    CMD_GROUP_KNOWLEDGEBASE,
     CMD_GROUP_MIGRATIONS,
     CMD_GROUP_OTHERS,
     CMD_GROUP_PLUGINS,
@@ -50,6 +55,11 @@ def build_command(main_command: SubcommandParser = None):
         name=CMD_GROUP_MIGRATIONS,
         title="Migrations",
         description="Mainly used for development",
+    )
+    main_cli.add_group(
+        name=CMD_GROUP_KNOWLEDGEBASE,
+        title="Knowledge Base operations",
+        description="Manage knowledge base data (controls definitions, compliance frameworks, tags, categories, etc.)",
     )
     main_cli.add_group(name=CMD_GROUP_OTHERS, title="Others")
 
@@ -83,6 +93,12 @@ def build_command(main_command: SubcommandParser = None):
     add_cli_stats(main_cli)
     add_cli_search(main_cli)
     add_cli_export(main_cli)
+
+    # Group knowledge base
+    add_cli_kb_export(main_cli)
+    add_cli_kb_feed(main_cli)
+    add_cli_kb_load(main_cli)
+    add_cli_kb_clear(main_cli)
 
     # Other
     add_cli_schema(main_cli)

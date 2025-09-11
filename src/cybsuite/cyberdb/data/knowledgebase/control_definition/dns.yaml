@@ -1,0 +1,23 @@
+- compliances:
+  - cybsuite.dns
+  name: dns.dkim_disabled
+- atomic: true
+  compliances:
+  - cybsuite.dns
+  name: dns.dmarc_disabled
+- compliances:
+  - cybsuite.dns
+  name: dns.domain_expiration_is_short
+  recommendation_difficulty: easy
+- compliances:
+  - cybsuite.dns
+  name: dns.domain_privacy_disabled
+- compliances:
+  - cybsuite.dns
+  name: dns.email_account_not_secured
+- compliances:
+  - cybsuite.dns
+  name: dns.registrar_lock_disabled
+- compliances:
+  - cybsuite.dns
+  name: dns.spf_disabled

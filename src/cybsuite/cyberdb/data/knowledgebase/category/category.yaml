@@ -1,0 +1,22 @@
+-   name: ftp
+    description: FTP (File Transfer Protocol) service
+-   name: linux
+    description: Linux operating system
+-   name: smb
+    description: SMB (Server Message Block) protocol
+-   name: ssh
+    description: SSH (Secure Shell) protocol
+-   name: web
+    description: Web applications and services
+-   name: windows
+    description: Windows operating system
+-   name: aws
+    description: Amazon Web Services cloud platform
+-   name: azure
+    description: Microsoft Azure cloud platform
+-   name: ad
+    description: Active Directory service
+-   name: gcp
+    description: Google Cloud Platform
+-   name: ms_cloud
+    description: Microsoft Cloud services and platforms

@@ -1,0 +1,20 @@
+- atomic: true
+  compliances:
+  - cybsuite.conf.windows
+  name: windows.bitlocker
+  severity: major
+- atomic: true
+  compliances:
+  - cybsuite.conf.windows
+  name: windows.cached_logons_count
+  severity: medium
+- atomic: true
+  compliances:
+  - cybsuite.conf.windows
+  name: windows.juicy_registry
+  severity: medium
+- atomic: true
+  compliances:
+  - cybsuite.conf.windows
+  name: windows.users.built_in_admin_not_renamed
+  severity: medium

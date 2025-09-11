@@ -14,4 +14,4 @@ class YAMLFormat(BaseFormatter):
         # TODO: find solution without lists that wont crash, and handle millions of rows
         if not isinstance(data, list):
             data = list(data)
-        yaml.safe_dump(data, output)
+        yaml.safe_dump(data, output, sort_keys=False, allow_unicode=True)

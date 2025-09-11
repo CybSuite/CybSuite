@@ -23,3 +23,4 @@ def test_table_multiple_hosts(new_cyberdb):
     assert "1.1.1.1" in result
     assert "2.2.2.2" in result
     assert "test" in result
+    assert "os_distribution" not in result_lower

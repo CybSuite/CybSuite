@@ -5,7 +5,7 @@ class UsersReviewer(WindowsReviewer):
     name = "users"
     metadata = Metadata(category="windows", description="Review users")
     files = {"local_users": "commands/local_users.json"}
-    controls = ["windows:users:built_in_admin_not_renamed"]
+    controls = ["windows.users.built_in_admin_not_renamed"]
 
     def do_run(self, files):
         hostname = self.context.hostname
@@ -21,7 +21,7 @@ class UsersReviewer(WindowsReviewer):
             # Controls for Built-in Administrator (RID 500)
             if rid == "500":
                 self.control(
-                    "windows:users:built_in_admin_not_renamed",
+                    "windows.users.built_in_admin_not_renamed",
                     details={"user": user["Name"]},
                 ).ok(
                     user["Name"] != "Administrator",

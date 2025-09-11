@@ -1,5 +1,6 @@
 description: "Security control specifications and requirements"
 tags: knowledgebase
+order: 11
 extra:
   web_menu: knowledgebase
 fields:

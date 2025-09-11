@@ -1,0 +1,3 @@
+- atomic: true
+  name: service.weak_service
+  severity: medium

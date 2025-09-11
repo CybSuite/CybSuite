@@ -46,9 +46,9 @@ def test_service_one_to_many_relation(new_cyberdb):
     assert entry.host.ip == "1.1.1.1"
 
 
-def test_request_remove_none_fields(new_cyberdb):
+def test_request_remove_empty_fields(new_cyberdb):
     new_cyberdb.feed("service", host="1.1.1.1", port=80, protocol="tcp")
-    data = new_cyberdb.request("service", format="json", remove_none_fields=True)
+    data = new_cyberdb.request("service", format="json", remove_empty_fields=True)
     item = json.loads(data)[0]
     assert item == {"host": "1.1.1.1", "port": 80, "protocol": "tcp"}
 

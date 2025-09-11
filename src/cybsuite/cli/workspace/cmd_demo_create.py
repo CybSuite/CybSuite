@@ -70,6 +70,11 @@ def _run(args):
         cyberdb.ingest("cyberdb", str(sample_db_path))
         logger.info("Sample data ingestion completed")
 
+        # Load knowledgebase data
+        logger.info("Loading knowledgebase data...")
+        cyberdb.load_knowledgebase()
+        logger.info("Knowledgebase data loaded")
+
     except FileExistsError as e:
         logger.error(f"{e}")
         logger.error("Use '--force' to overwrite existing workspace")

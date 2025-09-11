@@ -64,12 +64,15 @@ for entity in cyberdb_schema.filter(tags="knowledgebase"):
         type=cyberdb_schema["knowledgebase"],
         default=None,
         description="Reference to knowledgebase",
+        hidden_in_list=True,
     )
     entity.add_field(
         "knowledgebase_path",
         type=str,
-        default=None,
+        default=entity.name,
         description="Relative path to knowledgebasebase when exporting",
+        indexed=True,
+        hidden_in_list=True,
     )
 
 

@@ -1,0 +1,12 @@
+- control_definition: auth.password.reuse
+  title: Password reuse
+  description: "Password reuse occurs when the same password is used across multiple user accounts or systems. For example for differents applications, differents AD domains or between admin and user accounts."
+  lang: en
+  risk: "A single password breach can compromise multiple systems."
+  recommendation: "Implement unique passwords for each account"
+- control_definition: auth.password.weak
+  title: Weak password
+  description: "Weak password was identified."
+  lang: en
+  risk: "Weak passwords can be cracked quickly or bruteforced."
+  recommendation: "Use minimum complexity: uppercase, lowercase, digits, special characters. Minimum 12 characters for users, 15 for admins. Block passwords from known wordlists (rockyou.txt, SecLists). Alternatively, use entropy-based passwords with at least 60 bits of entropy."

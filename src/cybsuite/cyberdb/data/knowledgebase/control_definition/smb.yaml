@@ -1,0 +1,10 @@
+- atomic: true
+  compliances:
+  - cybsuite.pentest.ad
+  name: smb.no_signing
+  severity: medium
+- atomic: true
+  compliances:
+  - cybsuite.pentest.ad
+  name: smb.smbv1
+  severity: medium

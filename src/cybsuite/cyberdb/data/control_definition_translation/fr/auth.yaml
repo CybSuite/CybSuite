@@ -1,0 +1,12 @@
+- control_definition: auth.password.reuse
+  title: Réutilisation de mot de passe
+  description: "La réutilisation de mot de passe se produit lorsque le même mot de passe est utilisé sur plusieurs comptes utilisateur ou systèmes. Par exemple pour différentes applications, différents domaines AD ou entre comptes administrateur et utilisateur."
+  lang: fr
+  risk: "Une seule compromission de mot de passe peut compromettre plusieurs systèmes."
+  recommendation: "Implémenter des mots de passe uniques pour chaque compte"
+- control_definition: auth.password.weak
+  title: Mot de passe faible
+  description: "Un mot de passe faible a été identifié."
+  lang: fr
+  risk: "Les mots de passe faibles peuvent être cassés rapidement ou forcés par brute force."
+  recommendation: "Utiliser une complexité minimale : majuscules, minuscules, chiffres, caractères spéciaux. Minimum 12 caractères pour les utilisateurs, 15 pour les administrateurs. Bloquer les mots de passe des listes de mots connues (rockyou.txt, SecLists). Alternativement, utiliser des mots de passe basés sur l'entropie avec au moins 60 bits d'entropie."

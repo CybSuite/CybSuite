@@ -1,5 +1,6 @@
 description: "Localized control definition content"
 tags: knowledgebase
+order: 12
 extra:
   web_menu: knowledgebase
 fields:
