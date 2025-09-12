@@ -9,6 +9,8 @@ urlpatterns = [
     path(
         "nav_links/", views.get_navbar, name="nav_links"
     ),  # Frontend expects this endpoint
+    # Homepage data endpoint
+    path("homepage/", views.get_homepage_data, name="homepage_data"),
     # Control definition related endpoints
     path(
         "schema/entity/control_definition_w_controls/",
