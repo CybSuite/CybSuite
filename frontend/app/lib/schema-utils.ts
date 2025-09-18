@@ -50,7 +50,8 @@ export function parseFieldAnnotation(field: FieldSchema): ColumnTypeInfo {
         isArray: true,
         isRelation: true,
         baseType: "relation",
-        referencedEntity: entityMatch[1],
+        // Prefer server-provided referenced_entity over annotation parsing
+        referencedEntity: field.referenced_entity || entityMatch[1],
       };
     }
 
@@ -82,7 +83,8 @@ export function parseFieldAnnotation(field: FieldSchema): ColumnTypeInfo {
       isArray: false,
       isRelation: true,
       baseType: "relation",
-      referencedEntity: entityMatch[1],
+      // Prefer server-provided referenced_entity over annotation parsing
+      referencedEntity: field.referenced_entity || entityMatch[1],
     };
   }
 
@@ -94,6 +96,17 @@ export function parseFieldAnnotation(field: FieldSchema): ColumnTypeInfo {
       ...parseBasicType(className),
       isArray: false,
       isRelation: false,
+    };
+  }
+
+  // Check if field has referenced_entity set (fallback for server-provided relation info)
+  if (field.referenced_entity) {
+    return {
+      variant: "select",
+      isArray: false,
+      isRelation: true,
+      baseType: "relation",
+      referencedEntity: field.referenced_entity,
     };
   }
 

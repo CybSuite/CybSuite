@@ -19,6 +19,7 @@ import { LocalSortList } from "./LocalSortList";
 export interface CybsuiteTableServerProps<TData> {
     data: TData[];
     columns?: ColumnDef<TData>[];
+    currentEntity?: string;
     loading?: boolean;
     pageSize?: number;
     currentPage?: number;
@@ -52,6 +53,7 @@ export interface CybsuiteTableServerProps<TData> {
 function CybsuiteTableServer<TData extends { id?: string | number }>({
     data,
     columns: providedColumns,
+    currentEntity,
     loading = false,
     pageSize = 10,
     currentPage = 0,
@@ -286,6 +288,7 @@ function CybsuiteTableServer<TData extends { id?: string | number }>({
                         <LocalFilterMenu
                             table={table}
                             columns={providedColumns}
+                            currentEntity={currentEntity}
                             isServerManaged={true}
                             currentServerFilters={filters}
                             onServerFiltersChange={onFilterChange}
