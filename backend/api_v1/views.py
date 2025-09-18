@@ -174,8 +174,8 @@ def get_homepage_data(request):
             top_domains = (
                 db.request("ad_domain")
                 .annotate(
-                    users=Coalesce(Count("ad_users"), Value(0)),
-                    computers=Coalesce(Count("ad_computers"), Value(0)),
+                    users=Coalesce(Count("ad_users", distinct=True), Value(0)),
+                    computers=Coalesce(Count("ad_computers", distinct=True), Value(0)),
                 )
                 .annotate(total_domains=F("users") + F("computers"))
                 .order_by("-total_domains")[:3]
@@ -907,21 +907,22 @@ def get_entity_options(request, entity):
 
         for item in items:
             # Try to get a meaningful string representation
-            # Priority: name > title > display_name > str(item) > id
+            # Priority: str(item) > name > title > display_name > id
             repr_value = None
 
-            for attr in ["name", "title", "display_name", "label"]:
-                if hasattr(item, attr):
-                    value = getattr(item, attr)
-                    if value:
-                        repr_value = str(value)
-                        break
+            if str(item) != f"{entity} object":
+                repr_value = str(item)
+            else:
+                for attr in ["name", "title", "display_name", "label"]:
+                    if hasattr(item, attr):
+                        value = getattr(item, attr)
+                        if value:
+                            repr_value = str(value)
+                            break
 
-            # Fallback to string representation or ID
-            if not repr_value:
-                repr_value = (
-                    str(item) if str(item) != f"{entity} object" else f"#{item.id}"
-                )
+                # Fallback to ID
+                if repr_value is None:
+                    repr_value = f"#{item.id}"
 
             options.append({"id": item.id, "repr": repr_value})
 

@@ -455,15 +455,32 @@ def filter_data_table_queryset(queryset, table_params, dict_field_names):
             global_logic = filter_data.get("globalLogic", "and")
 
             filter_q_objects = []
+            has_foreign_key_filters = False  # Track if we have any foreign key filters
 
             for filter_item in advanced_filters:
                 column = filter_item.get("column")
                 filter_operator = filter_item.get("operator")
                 value = filter_item.get("value")
                 negated = filter_item.get("negated", False)
+                case_sensitive = filter_item.get(
+                    "caseSensitive", False
+                )  # Default to case-insensitive
 
                 if not column or not filter_operator:
                     continue
+
+                # Handle foreign key filters (convert dot notation to Django ORM syntax)
+                if "." in column and not any(
+                    column.startswith(f"{df}.") for df in dict_field_names
+                ):
+                    # This is a foreign key filter like "services.port"
+                    # Convert to Django ORM syntax: "services__port"
+                    django_column = column.replace(".", "__")
+                    has_foreign_key_filters = (
+                        True  # Mark that we have foreign key filters
+                    )
+                else:
+                    django_column = column
 
                 # Skip flattened field filters (handle post-processing)
                 if "." in column and any(
@@ -472,10 +489,10 @@ def filter_data_table_queryset(queryset, table_params, dict_field_names):
                     continue
 
                 # Collect extra field filters for post-processing
-                if column in extra_fields:
+                if django_column in extra_fields:
                     extra_field_filters.append(
                         {
-                            "column": column,
+                            "column": django_column,
                             "operator": filter_operator,
                             "value": value,
                             "global_logic": global_logic,
@@ -486,47 +503,83 @@ def filter_data_table_queryset(queryset, table_params, dict_field_names):
                 # Build Django ORM filter based on operator
                 filter_q = None
 
+                # Helper function to check if field is date/datetime/time field
+                def is_temporal_field(field_name):
+                    try:
+                        # Handle foreign key relationships (e.g., "services__port")
+                        if "__" in field_name:
+                            # For foreign key fields, we'll be more conservative
+                            # and only check for null values to avoid format errors
+                            return True
+
+                        # Get the actual field from the model
+                        field = queryset.model._meta.get_field(field_name)
+                        return field.get_internal_type() in [
+                            "DateField",
+                            "DateTimeField",
+                            "TimeField",
+                        ]
+                    except:
+                        # If we can't determine the field type, be conservative
+                        return False
+
                 if filter_operator == "contains":
-                    filter_q = Q(**{f"{column}__icontains": value})
+                    if case_sensitive:
+                        filter_q = Q(**{f"{django_column}__contains": value})
+                    else:
+                        filter_q = Q(**{f"{django_column}__icontains": value})
                 elif filter_operator == "is":
                     # Handle blank value case - if value is empty string, check for null or empty
                     if value == "":
-                        filter_q = Q(**{f"{column}__isnull": True}) | Q(
-                            **{f"{column}__exact": ""}
-                        )
+                        if is_temporal_field(django_column):
+                            # For date/datetime fields, only check for null
+                            filter_q = Q(**{f"{django_column}__isnull": True})
+                        else:
+                            # For other fields, check for null or empty string
+                            filter_q = Q(**{f"{django_column}__isnull": True}) | Q(
+                                **{f"{django_column}__exact": ""}
+                            )
                     else:
-                        filter_q = Q(**{f"{column}__iexact": value})
+                        if case_sensitive:
+                            filter_q = Q(**{f"{django_column}__exact": value})
+                        else:
+                            filter_q = Q(**{f"{django_column}__iexact": value})
                 elif filter_operator == "is_none":
-                    filter_q = Q(**{f"{column}__isnull": True}) | Q(
-                        **{f"{column}__exact": ""}
-                    )
+                    if is_temporal_field(django_column):
+                        # For date/datetime fields, only check for null
+                        filter_q = Q(**{f"{django_column}__isnull": True})
+                    else:
+                        # For other fields, check for null or empty string
+                        filter_q = Q(**{f"{django_column}__isnull": True}) | Q(
+                            **{f"{django_column}__exact": ""}
+                        )
                 elif filter_operator == "equals":
                     if value is not None:
-                        filter_q = Q(**{f"{column}__exact": value})
+                        filter_q = Q(**{f"{django_column}__exact": value})
                 elif filter_operator == "greater_than":
                     if value is not None:
-                        filter_q = Q(**{f"{column}__gt": value})
+                        filter_q = Q(**{f"{django_column}__gt": value})
                 elif filter_operator == "less_than":
                     if value is not None:
-                        filter_q = Q(**{f"{column}__lt": value})
+                        filter_q = Q(**{f"{django_column}__lt": value})
                 elif filter_operator == "greater_equal":
                     if value is not None:
-                        filter_q = Q(**{f"{column}__gte": value})
+                        filter_q = Q(**{f"{django_column}__gte": value})
                 elif filter_operator == "less_equal":
                     if value is not None:
-                        filter_q = Q(**{f"{column}__lte": value})
+                        filter_q = Q(**{f"{django_column}__lte": value})
                 elif filter_operator == "has_any_of":
                     if isinstance(value, list) and value:
-                        filter_q = Q(**{f"{column}__in": value})
+                        filter_q = Q(**{f"{django_column}__in": value})
                 elif filter_operator == "is_on":
                     if value:
-                        filter_q = Q(**{f"{column}__date": value})
+                        filter_q = Q(**{f"{django_column}__date": value})
                 elif filter_operator == "is_before":
                     if value:
-                        filter_q = Q(**{f"{column}__lt": value})
+                        filter_q = Q(**{f"{django_column}__lt": value})
                 elif filter_operator == "is_after":
                     if value:
-                        filter_q = Q(**{f"{column}__gt": value})
+                        filter_q = Q(**{f"{django_column}__gt": value})
                 elif filter_operator == "is_between":
                     if (
                         isinstance(value, dict)
@@ -535,7 +588,7 @@ def filter_data_table_queryset(queryset, table_params, dict_field_names):
                     ):
                         filter_q = Q(
                             **{
-                                f"{column}__range": [
+                                f"{django_column}__range": [
                                     value["start"],
                                     value["end"],
                                 ]
@@ -555,6 +608,10 @@ def filter_data_table_queryset(queryset, table_params, dict_field_names):
                         queryset = queryset.filter(q_obj)
                 else:  # 'or'
                     queryset = queryset.filter(reduce(operator.or_, filter_q_objects))
+
+                # Add distinct() to avoid duplicates when foreign key filters are used
+                if has_foreign_key_filters:
+                    queryset = queryset.distinct()
 
         except json.JSONDecodeError:
             # Return error information instead of Response object

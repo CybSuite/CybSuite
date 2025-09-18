@@ -482,6 +482,7 @@ export default function ModelDataTable({
 						(typeInfo.variant === 'datetime' ? 'date' : typeInfo.variant),
 					options: filterOptions,
 					nullable: fieldSchema.nullable,
+					relatedEntity: typeInfo.isRelation ? typeInfo.referencedEntity : undefined,
 				} as any, // Use 'as any' to allow custom properties
 				enableColumnFilter:
 					// Enable filtering for:
@@ -854,6 +855,7 @@ export default function ModelDataTable({
 						key={tableKey}
 						data={memoizedData}
 						columns={columns as any}
+						currentEntity={model}
 						loading={loading}
 						pageSize={pagination.pageSize}
 						currentPage={pagination.pageIndex}
@@ -878,6 +880,7 @@ export default function ModelDataTable({
 						key={tableKey}
 						data={data}
 						columns={columns}
+						currentEntity={model}
 						pageSize={pagination.pageSize}
 						enableSorting={true}
 						enableFiltering={true}
@@ -899,6 +902,7 @@ export default function ModelDataTable({
 						key={tableKey}
 						data={[]}
 						columns={[]}
+						currentEntity={model}
 						loading={true}
 						pageSize={pagination.pageSize}
 						currentPage={pagination.pageIndex}
@@ -923,6 +927,7 @@ export default function ModelDataTable({
 						key={tableKey}
 						data={[]}
 						columns={[]}
+						currentEntity={model}
 						pageSize={pagination.pageSize}
 						enableSorting={true}
 						enableFiltering={true}

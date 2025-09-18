@@ -47,6 +47,7 @@ import { LocalSortList } from "./LocalSortList";
 export interface CybsuiteTableProps<TData> {
     data: TData[];
     columns?: ColumnDef<TData>[];
+    currentEntity?: string;
     pageSize?: number;
     enableSorting?: boolean;
     enableFiltering?: boolean;
@@ -64,6 +65,7 @@ export interface CybsuiteTableProps<TData> {
 export default function CybsuiteTable<TData extends { id?: string | number }>({
     data,
     columns: providedColumns,
+    currentEntity,
     pageSize = 10,
     enableSorting = true,
     enableFiltering = true,
@@ -159,16 +161,32 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
                         // Apply different filtering logic based on operator
                         switch (filter.operator) {
                             case 'contains':
-                                return dictToString(cellValue).toLowerCase().includes(dictToString(filterValueToUse).toLowerCase());
+                                if (filter.caseSensitive) {
+                                    return dictToString(cellValue).includes(dictToString(filterValueToUse));
+                                } else {
+                                    return dictToString(cellValue).toLowerCase().includes(dictToString(filterValueToUse).toLowerCase());
+                                }
 
                             case 'does_not_contain':
-                                return !dictToString(cellValue).toLowerCase().includes(dictToString(filterValueToUse).toLowerCase());
+                                if (filter.caseSensitive) {
+                                    return !dictToString(cellValue).includes(dictToString(filterValueToUse));
+                                } else {
+                                    return !dictToString(cellValue).toLowerCase().includes(dictToString(filterValueToUse).toLowerCase());
+                                }
 
                             case 'is':
-                                return dictToString(cellValue).toLowerCase() === dictToString(filterValueToUse).toLowerCase();
+                                if (filter.caseSensitive) {
+                                    return dictToString(cellValue) === dictToString(filterValueToUse);
+                                } else {
+                                    return dictToString(cellValue).toLowerCase() === dictToString(filterValueToUse).toLowerCase();
+                                }
 
                             case 'is_not':
-                                return dictToString(cellValue).toLowerCase() !== dictToString(filterValueToUse).toLowerCase();
+                                if (filter.caseSensitive) {
+                                    return dictToString(cellValue) !== dictToString(filterValueToUse);
+                                } else {
+                                    return dictToString(cellValue).toLowerCase() !== dictToString(filterValueToUse).toLowerCase();
+                                }
 
                             case 'is_empty':
                                 return !cellValue || dictToString(cellValue).trim() === '';
@@ -499,6 +517,7 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
                             ref={advancedFilterRef}
                             table={table}
                             onFiltersChange={setHasAdvancedFilters}
+                            currentEntity={currentEntity}
                         />
                     )}
 
