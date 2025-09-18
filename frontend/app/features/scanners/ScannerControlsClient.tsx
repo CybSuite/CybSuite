@@ -1,10 +1,8 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
     Accordion,
@@ -13,29 +11,17 @@ import {
     AccordionTrigger,
 } from "@/components/ui/accordion"
 import {
-    Play,
     Pause,
     CheckCircle,
     XCircle,
     AlertCircle,
     Radar,
-    RefreshCw,
     Hourglass,
-    Terminal,
-    ChevronsUpDown,
-    Check
+    Terminal
 } from 'lucide-react'
-import { api } from '@/app/lib/api'
 import { useScanStatus } from '@/app/hooks/useScanStatus'
-import { cn } from '@/lib/utils'
 import { ProgressBar } from '@/app/components/ProgressBar'
 import { Scanner } from './ScannersList'
-
-interface ToastMessage {
-    id: string
-    type: 'success' | 'error' | 'info'
-    message: string
-}
 
 interface ScannerControlsClientProps {
     scanners: Scanner[]
@@ -55,34 +41,13 @@ export default function ScannerControlsClient({
     externalStartingScan,
     scanAllProgress
 }: ScannerControlsClientProps) {
-    const [startingScan, setStartingScan] = useState<string | null>(null)
-    const [alerts, setAlerts] = useState<ToastMessage[]>([])
-    const [selectedScanner, setSelectedScanner] = useState<string>("")
     const logsEndRef = useRef<HTMLDivElement>(null)
     const logsContainerRef = useRef<HTMLDivElement>(null)
 
-    // Use external state if provided, otherwise use internal state
-    const currentStartingScan = externalStartingScan !== undefined ? externalStartingScan : startingScan
-
     const {
         status: scanStatus,
-        connectionState,
-        isConnected,
-        requestStatus,
-        resetConnection,
         logs,
     } = useScanStatus()
-
-    const showAlert = (type: ToastMessage['type'], message: string) => {
-        const id = Math.random().toString(36).substr(2, 9)
-        const alert = { id, type, message }
-        setAlerts(prev => [...prev, alert])
-
-        // Auto remove after 5 seconds
-        setTimeout(() => {
-            setAlerts(prev => prev.filter(a => a.id !== id))
-        }, 5000)
-    }
 
     // Auto-scroll logs to bottom when new logs are added
     useEffect(() => {
@@ -99,55 +64,6 @@ export default function ScannerControlsClient({
                 logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight
             }
         }, 100)
-    }
-
-    const handleStartScan = async (scannerName: string) => {
-        // If external handler is provided, use it instead
-        if (externalHandleStartScan) {
-            return externalHandleStartScan(scannerName)
-        }
-
-        // Original internal logic
-        if (scanStatus.status === 'running') {
-            showAlert('error', 'A scan is already running. Please wait for it to complete.')
-            return
-        }
-
-        // Enhanced WebSocket reconnection logic - try once if not connected
-        if (!isConnected && connectionState !== 'connecting') {
-            showAlert('info', 'Connecting to real-time updates...')
-            resetConnection()
-
-            // Wait for connection attempt - give it a bit more time
-            await new Promise(resolve => setTimeout(resolve, 3000))
-
-            // If still not connected after retry, continue anyway but warn user
-            if (!isConnected) {
-                showAlert('info', 'Real-time updates may be limited. Scan will proceed.')
-            }
-        }
-
-        try {
-            setStartingScan(scannerName)
-            const response = await api.scanners.startScan(scannerName)
-
-            if (response.error) {
-                if (response.status === 409) {
-                    showAlert('error', 'A scan is already running')
-                } else {
-                    showAlert('error', response.error)
-                }
-            } else {
-                showAlert('success', `Scan started with ${scannerName}`)
-                // Request updated status
-                setTimeout(() => requestStatus(), 1000)
-            }
-        } catch (err) {
-            const errorMsg = err instanceof Error ? err.message : 'Failed to start scan'
-            showAlert('error', errorMsg)
-        } finally {
-            setStartingScan(null)
-        }
     }
 
     const getStatusIcon = (status: string) => {
@@ -318,30 +234,6 @@ export default function ScannerControlsClient({
 
     return (
         <>
-            {/* Toast/Alert Messages */}
-            <div className="fixed top-4 right-4 z-50 space-y-2">
-                {alerts.map((alert) => (
-                    <Alert
-                        key={alert.id}
-                        className={`max-w-sm ${alert.type === 'error'
-                            ? 'border-red-200 bg-red-50 text-red-800'
-                            : alert.type === 'success'
-                                ? 'border-green-200 bg-green-50 text-green-800'
-                                : 'border-blue-200 bg-blue-50 text-blue-800'
-                            }`}
-                    >
-                        {alert.type === 'error' ? (
-                            <XCircle className="h-4 w-4" />
-                        ) : alert.type === 'success' ? (
-                            <CheckCircle className="h-4 w-4" />
-                        ) : (
-                            <AlertCircle className="h-4 w-4" />
-                        )}
-                        <AlertDescription>{alert.message}</AlertDescription>
-                    </Alert>
-                ))}
-            </div>
-
             {/* Compact Scan Status Card */}
             <Card className="border-0 shadow-md bg-gradient-to-br from-slate-50 to-slate-100">
                 <CardHeader className="pb-3">
@@ -635,72 +527,7 @@ export default function ScannerControlsClient({
                 </CardContent>
             </Card>
 
-            {/* Scan Control Section */}
-            <Card>
-                <CardHeader className="pb-3">
-                    <CardTitle className="text-base font-semibold">Run Security Scan</CardTitle>
-                    <CardDescription className="text-sm">
-                        Select a scanner and start a security assessment.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-0 flex">
-                    <div className="flex items-center space-x-3 w-fit mx-auto">
-                        <div className="relative">
-                            <DropdownMenu modal={false}>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        role="combobox"
-                                        className="w-[200px] justify-between"
-                                    >
-                                        {selectedScanner || "Choose a scanner..."}
-                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent className="w-[200px] p-0">
-                                    {scanners.map((scanner) => (
-                                        <DropdownMenuItem
-                                            key={scanner.name}
-                                            onSelect={() => setSelectedScanner(scanner.name)}
-                                            className="cursor-pointer"
-                                        >
-                                            <Check
-                                                className={cn(
-                                                    "mr-2 h-4 w-4",
-                                                    selectedScanner === scanner.name ? "opacity-100" : "opacity-0"
-                                                )}
-                                            />
-                                            {scanner.name}
-                                        </DropdownMenuItem>
-                                    ))}
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </div>
-                        <Button
-                            onClick={() => handleStartScan(selectedScanner)}
-                            disabled={
-                                !selectedScanner ||
-                                scanStatus.status === 'running' ||
-                                currentStartingScan === selectedScanner ||
-                                (connectionState !== 'connected' && connectionState !== 'polling')
-                            }
-                            className="min-w-[100px]"
-                        >
-                            {currentStartingScan === selectedScanner ? (
-                                <>
-                                    <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                                    Starting...
-                                </>
-                            ) : (
-                                <>
-                                    <Play className="h-4 w-4 mr-1" />
-                                    Run Scan
-                                </>
-                            )}
-                        </Button>
-                    </div>
-                </CardContent>
-            </Card>
+
         </>
     )
 }
