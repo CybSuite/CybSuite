@@ -11,7 +11,7 @@ export default async function ScannersPage() {
 	const scanners = await getScannersData()
 
 	return (
-		<div className="container mx-auto p-6 space-y-6">
+		<div className="container mx-auto p-8 space-y-8 max-w-none">
 			{/* Page Header - Static, rendered on server */}
 			<div className="space-y-2">
 				<h1 className="text-3xl font-bold tracking-tight">Security Scanners</h1>
@@ -20,7 +20,7 @@ export default async function ScannersPage() {
 				</p>
 			</div>
 
-			<div className="space-y-2 container max-w-5xl mx-auto">
+			<div className="space-y-4">
 				{/* Unified scanner management with both controls and list */}
 				<Suspense fallback={
 					<div className="flex items-center justify-center h-64">
