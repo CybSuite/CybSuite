@@ -50,11 +50,17 @@ export class ApiClient {
   ): Promise<ApiResponse<T>> {
     const url = `${this.baseUrl}${endpoint}`;
 
+    // Don't set Content-Type for FormData - browser will set it with boundary
+    const isFormData = options.body instanceof FormData;
+    const headers: HeadersInit = isFormData
+      ? { ...options.headers }
+      : {
+          "Content-Type": "application/json",
+          ...options.headers,
+        };
+
     const config: RequestInit = {
-      headers: {
-        "Content-Type": "application/json",
-        ...options.headers,
-      },
+      headers,
       // Only include credentials on client-side
       ...(typeof window !== "undefined" && {
         credentials: "include" as RequestCredentials,
@@ -149,6 +155,19 @@ export class ApiClient {
     return this.request<T>(endpoint, {
       method: "DELETE",
       body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  async postFormData<T>(
+    endpoint: string,
+    formData: FormData
+  ): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: "POST",
+      body: formData,
+      headers: {
+        // Don't set Content-Type, let browser set it with boundary for multipart/form-data
+      },
     });
   }
 
@@ -478,6 +497,97 @@ export const api = {
         current_scanner?: string;
         scanned_scanners?: string[];
       }>("/api/v1/scan/status/"),
+  },
+
+  // Ingestor endpoints
+  ingestors: {
+    getIngestors: () =>
+      apiClient.get<
+        Array<{
+          name: string;
+          description: string | null;
+          tags: string[];
+          autodetect_is_file?: boolean;
+          autodetect_is_dir?: boolean;
+        }>
+      >("/api/v1/plugins/ingestors/"),
+    startIngest: (ingestorName: string, files: File[]) => {
+      const formData = new FormData();
+      formData.append("ingestor_name", ingestorName);
+      files.forEach((file, index) => {
+        formData.append(`files[${index}]`, file);
+      });
+
+      return apiClient.postFormData<{
+        status: string;
+        ingestor_name: string;
+        message: string;
+      }>("/api/v1/ingest/", formData);
+    },
+    startIngestCompressed: (ingestorName: string, files: File[]) => {
+      const formData = new FormData();
+      formData.append("ingestor_name", ingestorName);
+      formData.append("compressed_file_mode", "true");
+      files.forEach((file, index) => {
+        formData.append(`files[${index}]`, file);
+      });
+
+      return apiClient.postFormData<{
+        status: string;
+        ingestor_name: string;
+        message: string;
+      }>("/api/v1/ingest/", formData);
+    },
+    startMultiIngest: (ingestorNames: string[], files: File[]) => {
+      const formData = new FormData();
+      formData.append("ingestor_names", JSON.stringify(ingestorNames));
+      files.forEach((file, index) => {
+        formData.append(`files[${index}]`, file);
+      });
+
+      return apiClient.postFormData<{
+        status: string;
+        ingestor_names: string[];
+        total_ingestors: number;
+        message: string;
+      }>("/api/v1/ingest/", formData);
+    },
+    getIngestStatus: () =>
+      apiClient.get<{
+        status: "idle" | "running" | "completed" | "failed";
+        ingestor_name: string | null;
+        ingestor_names?: string[];
+        start_time: string | null;
+        end_time: string | null;
+        progress: number;
+        message: string;
+        results: any | null;
+        error: string | null;
+        // Optional fields for detailed progress
+        progress_bar?: number;
+        progress_type?: string;
+        display_mode?: string;
+        current_portion?: number;
+        total_portions?: number | null;
+        current_step?: number;
+        total_steps?: number | null;
+        portion_label?: string | null;
+        step_label?: string | null;
+        // Multi-ingest specific fields
+        multi_ingest?: boolean;
+        current_ingestor?: string;
+        ingested_ingestors?: string[];
+      }>("/api/v1/ingest/status/"),
+    autoDetect: (files: File[]) => {
+      const formData = new FormData();
+      files.forEach((file, index) => {
+        formData.append(`files[${index}]`, file);
+      });
+
+      return apiClient.postFormData<{
+        detections: { [fileName: string]: string[] };
+      }>("/api/v1/plugins/ingestors/autodetect/", formData);
+    },
   },
 
   // Legacy endpoints (backward compatibility)
