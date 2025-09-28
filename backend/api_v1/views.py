@@ -2,7 +2,10 @@ import json
 import operator
 import os
 import random
+import shutil
+import tarfile
 import tempfile
+import zipfile
 from functools import reduce
 from typing import Dict
 
@@ -14,7 +17,8 @@ from django.db.models import Count, F, Prefetch, Q, Value
 from django.db.models.functions import Coalesce
 from django.http import FileResponse
 from rest_framework import status
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, parser_classes
+from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 
 from .navbar_application import nav_links
@@ -34,6 +38,8 @@ from .utils import (
     get_empty_field_description,
     get_flattened_columns_from_sample_data,
     map_koalak_type_to_form_type,
+    run_ingest_async,
+    run_multiple_ingests_async,
     run_multiple_scans_async,
     run_scan_async,
 )
@@ -65,6 +71,75 @@ example_tags = [
     "reconnaissance",
     "malware",
 ]
+
+
+def decompress_file(compressed_file_path: str, original_filename: str) -> str:
+    """
+    Decompress a compressed file to a temporary directory.
+
+    Args:
+        compressed_file_path: Path to the compressed file
+        original_filename: Original filename to determine compression type
+
+    Returns:
+        Path to the temporary directory containing decompressed files
+
+    Raises:
+        Exception: If decompression fails or format is unsupported
+    """
+    # Create a temporary directory for decompression
+    temp_dir = tempfile.mkdtemp(prefix="cybsuite_decompressed_")
+
+    try:
+        filename_lower = original_filename.lower()
+
+        if filename_lower.endswith(".zip"):
+            with zipfile.ZipFile(compressed_file_path, "r") as zip_ref:
+                zip_ref.extractall(temp_dir)
+        elif filename_lower.endswith((".tar", ".tar.gz", ".tgz")):
+            with tarfile.open(compressed_file_path, "r:*") as tar_ref:
+                tar_ref.extractall(temp_dir)
+        elif filename_lower.endswith(".gz") and not filename_lower.endswith(".tar.gz"):
+            import gzip
+
+            # For single .gz files, decompress to a single file
+            with gzip.open(compressed_file_path, "rb") as gz_file:
+                # Remove .gz extension for output filename
+                output_filename = (
+                    original_filename[:-3]
+                    if original_filename.endswith(".gz")
+                    else "decompressed_file"
+                )
+                output_path = os.path.join(temp_dir, output_filename)
+                with open(output_path, "wb") as output_file:
+                    shutil.copyfileobj(gz_file, output_file)
+        elif filename_lower.endswith(".bz2"):
+            import bz2
+
+            # For single .bz2 files, decompress to a single file
+            with bz2.open(compressed_file_path, "rb") as bz2_file:
+                # Remove .bz2 extension for output filename
+                output_filename = (
+                    original_filename[:-4]
+                    if original_filename.endswith(".bz2")
+                    else "decompressed_file"
+                )
+                output_path = os.path.join(temp_dir, output_filename)
+                with open(output_path, "wb") as output_file:
+                    shutil.copyfileobj(bz2_file, output_file)
+        else:
+            # For unsupported formats like .rar, .7z - we can't handle these with standard library
+            raise Exception(
+                f"Unsupported compression format: {original_filename}. Only .zip, .tar, .tar.gz, .gz, and .bz2 are supported."
+            )
+
+        return temp_dir
+
+    except Exception as e:
+        # Clean up temp directory if decompression failed
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        raise Exception(f"Decompression failed: {str(e)}")
 
 
 @api_view(["GET"])
@@ -1533,6 +1608,7 @@ def list_ingestors(request):
 
 
 @api_view(["POST"])
+@parser_classes([MultiPartParser])
 def ingest_data(request, ingestor_name):
     """Ingest data using the specified ingestor plugin"""
     db = CyberDB.from_default_config()
@@ -1550,31 +1626,593 @@ def ingest_data(request, ingestor_name):
             )
 
         file = request.FILES["file"]
-        content = file.read()
 
-        # Get the ingestor plugin
-        if ingestor_name not in [plugin.name for plugin in pm_ingestors]:
+        # Check if the uploaded item is a folder (folders typically have size 0 and no content)
+        if file.size == 0 and (
+            not hasattr(file, "content_type")
+            or file.content_type == "application/octet-stream"
+        ):
+            return Response(
+                {
+                    "error": "Folder uploads are not supported. Please upload individual files only."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        file_content = file.read()
+
+        # Decode bytes to text with UTF-8, fallback to latin-1
+        try:
+            if isinstance(file_content, bytes):
+                try:
+                    file_text = file_content.decode("utf-8")
+                except UnicodeDecodeError:
+                    file_text = file_content.decode("latin-1")
+            else:
+                file_text = file_content
+        except Exception as decode_error:
+            return Response(
+                {"error": f"Failed to decode file content: {str(decode_error)}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Create temporary file for the ingestor
+        import tempfile
+
+        temp_file = tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=f"_{file.name}"
+        )
+        try:
+            temp_file.write(file_text)
+            temp_file.flush()
+            temp_file_path = temp_file.name
+        finally:
+            temp_file.close()
+
+        # Validate ingestor exists
+        available_ingestors = [plugin.name for plugin in pm_ingestors]
+        if ingestor_name not in available_ingestors:
+            # Clean up temp file
+            import os
+
+            try:
+                os.unlink(temp_file_path)
+            except:
+                pass
             return Response(
                 {"error": f"Ingestor '{ingestor_name}' not found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        ingestor = pm_ingestors[ingestor_name](db)
+        # Run the ingestor using CyberDB's ingest method
+        try:
+            db.ingest(ingestor_name, temp_file_path)
+        finally:
+            # Clean up temporary file
+            import os
 
-        # Run the ingestor
-        result = ingestor.ingest(content)
+            try:
+                os.unlink(temp_file_path)
+            except:
+                pass
 
         return Response(
             {
                 "status": "success",
                 "message": f"Data ingested successfully using {ingestor_name}",
-                "details": result,
+                "details": None,
             }
         )
 
     except Exception as e:
         return Response(
             {"error": f"Error ingesting data: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+# New Ingest Operations Endpoints with async support and file upload
+@api_view(["POST"])
+@parser_classes([MultiPartParser])
+def start_ingest(request):
+    """Start a new ingest (single ingestor or multiple ingestors) with file upload support"""
+    if pm_ingestors is None:
+        return Response(
+            {"error": "Ingestors not available"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    try:
+        # Check if an ingest is already running
+        current_status = cache.get("current_ingest_status", {})
+        if current_status.get("status") == "running":
+            return Response(
+                {
+                    "error": "An ingest is already running",
+                    "current_ingestor": current_status.get("ingestor_name"),
+                    "start_time": current_status.get("start_time"),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Check if this is compressed file mode
+        compressed_file_mode = request.data.get("compressed_file_mode") == "true"
+
+        # Get uploaded files and save them to temporary files
+        files = []
+        has_compressed_files = False  # Track if we processed any compressed files
+        for key in request.FILES:
+            if key.startswith("files["):
+                file_obj = request.FILES[key]
+
+                # Check if the uploaded item is a folder
+                if file_obj.size == 0 and (
+                    not hasattr(file_obj, "content_type")
+                    or file_obj.content_type == "application/octet-stream"
+                ):
+                    return Response(
+                        {
+                            "error": f"Folder uploads are not supported. '{file_obj.name}' appears to be a folder. Please upload individual files only."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                if compressed_file_mode:
+                    # Handle compressed files
+                    compressed_extensions = [
+                        ".zip",
+                        ".tar",
+                        ".tar.gz",
+                        ".rar",
+                        ".7z",
+                        ".gz",
+                        ".bz2",
+                    ]
+                    is_compressed = any(
+                        file_obj.name.lower().endswith(ext)
+                        for ext in compressed_extensions
+                    )
+
+                    if not is_compressed:
+                        return Response(
+                            {
+                                "error": f"File '{file_obj.name}' is not a supported compressed file format. Supported formats: {', '.join(compressed_extensions)}"
+                            },
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+
+                    # Create a temporary file for the compressed file
+                    temp_compressed_file = tempfile.NamedTemporaryFile(
+                        delete=False, suffix=f"_compressed_{file_obj.name}"
+                    )
+
+                    # Write compressed file content (keep as binary)
+                    file_content = file_obj.read()
+                    temp_compressed_file.write(file_content)
+                    temp_compressed_file.close()
+
+                    # Decompress the file to a temporary directory
+                    try:
+                        decompressed_dir = decompress_file(
+                            temp_compressed_file.name, file_obj.name
+                        )
+                        files.append(
+                            decompressed_dir
+                        )  # Store directory path instead of file path
+                        has_compressed_files = (
+                            True  # Mark that we processed compressed files
+                        )
+                    except Exception as e:
+                        # Clean up the temporary compressed file
+                        os.unlink(temp_compressed_file.name)
+                        return Response(
+                            {
+                                "error": f"Failed to decompress '{file_obj.name}': {str(e)}"
+                            },
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    finally:
+                        # Clean up the temporary compressed file
+                        if os.path.exists(temp_compressed_file.name):
+                            os.unlink(temp_compressed_file.name)
+                else:
+                    # Handle regular files (existing logic)
+                    # Create a temporary file
+                    temp_file = tempfile.NamedTemporaryFile(
+                        mode="w+", delete=False, suffix=f"_{file_obj.name}"
+                    )
+
+                    # Read and decode the file content
+                    file_content = file_obj.read()
+                    try:
+                        if isinstance(file_content, bytes):
+                            file_content = file_content.decode("utf-8")
+                    except UnicodeDecodeError:
+                        # If UTF-8 decoding fails, try latin-1 as fallback
+                        try:
+                            file_content = file_content.decode("latin-1")
+                        except UnicodeDecodeError:
+                            # If all else fails, use error handling
+                            file_content = file_content.decode(
+                                "utf-8", errors="replace"
+                            )
+
+                    # Write content to temporary file
+                    temp_file.write(file_content)
+                    temp_file.close()
+
+                    # Store the temporary file path
+                    files.append(temp_file.name)
+
+        if not files:
+            return Response(
+                {"error": "No files provided"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check for both single ingestor and multiple ingestors formats
+        ingestor_name = request.data.get("ingestor_name")
+        ingestor_names_str = request.data.get("ingestor_names")
+
+        # Parse ingestor_names if it's a JSON string
+        ingestor_names = None
+        if ingestor_names_str:
+            try:
+                ingestor_names = (
+                    json.loads(ingestor_names_str)
+                    if isinstance(ingestor_names_str, str)
+                    else ingestor_names_str
+                )
+            except json.JSONDecodeError:
+                return Response(
+                    {"error": "ingestor_names must be valid JSON"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Handle multiple ingestors
+        if ingestor_names:
+            if not isinstance(ingestor_names, list) or len(ingestor_names) == 0:
+                return Response(
+                    {"error": "ingestor_names must be a non-empty list"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Validate all ingestor names exist
+            available_ingestors = [plugin.name for plugin in pm_ingestors]
+            invalid_ingestors = [
+                name for name in ingestor_names if name not in available_ingestors
+            ]
+
+            if invalid_ingestors:
+                return Response(
+                    {"error": f"Ingestors not found: {', '.join(invalid_ingestors)}"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            # Safety check: Replace file-only ingestors with "all" if we have compressed files
+            if has_compressed_files:
+                original_ingestors = ingestor_names.copy()
+                modified_ingestors = []
+
+                for ingestor_name in ingestor_names:
+                    # Find the ingestor plugin
+                    selected_plugin = None
+                    for plugin in pm_ingestors:
+                        if plugin.name == ingestor_name:
+                            selected_plugin = plugin
+                            break
+
+                    # Check if it's file-only
+                    if (
+                        selected_plugin
+                        and hasattr(selected_plugin, "autodetect_is_file")
+                        and selected_plugin.autodetect_is_file
+                        and not getattr(selected_plugin, "autodetect_is_dir", False)
+                    ):
+
+                        # Replace with "all" ingestor, but avoid duplicates
+                        if "all" not in modified_ingestors:
+                            modified_ingestors.append("all")
+                    else:
+                        # Keep the original ingestor
+                        modified_ingestors.append(ingestor_name)
+
+                # Update the ingestor list if changes were made
+                if modified_ingestors != original_ingestors:
+                    ingestor_names = modified_ingestors
+                    import logging
+
+                    logger = logging.getLogger(__name__)
+                    logger.info(
+                        f"Multi-ingest: Replaced file-only ingestors with 'all' ingestor "
+                        f"for compressed file handling. Original: {original_ingestors}, "
+                        f"Modified: {ingestor_names}"
+                    )
+
+            # Get additional ingest parameters from request
+            ingest_kwargs = request.data.get("ingest_kwargs", {})
+
+            # Start multiple ingests
+            db = CyberDB.from_default_config()
+            run_multiple_ingests_async(
+                db, pm_ingestors, ingestor_names, files, ingest_kwargs
+            )
+
+            return Response(
+                {
+                    "status": "Multi-ingest started",
+                    "ingestor_names": ingestor_names,
+                    "total_ingestors": len(ingestor_names),
+                    "total_files": len(files),
+                    "message": f"Multi-ingest with {len(ingestor_names)} ingestors and {len(files)} file(s) has been initiated. Use WebSocket connection to monitor progress.",
+                },
+                status=status.HTTP_202_ACCEPTED,
+            )
+
+        # Handle single ingestor (backward compatibility)
+        elif ingestor_name:
+            # Handle auto-detection for compressed files
+            if ingestor_name == "auto-detect" and compressed_file_mode:
+                try:
+                    # Auto-detect ingestors for decompressed contents
+                    detected_ingestors = []
+
+                    for file_path in files:
+                        # files contains directory paths for compressed files
+                        if os.path.isdir(file_path):
+                            # Scan directory for files and auto-detect
+                            import glob
+
+                            dir_files = glob.glob(
+                                os.path.join(file_path, "**", "*"), recursive=True
+                            )
+                            dir_files = [f for f in dir_files if os.path.isfile(f)]
+
+                            for dir_file in dir_files:
+                                for plugin in pm_ingestors:
+                                    try:
+                                        if plugin.autodetect_from_path(dir_file):
+                                            if plugin.name not in detected_ingestors:
+                                                detected_ingestors.append(plugin.name)
+                                            break  # Use first matching ingestor for this file
+                                    except Exception:
+                                        continue
+
+                    if not detected_ingestors:
+                        # No specific ingestors detected, use "all" as fallback
+                        ingestor_name = "all"
+                    else:
+                        # Check if the detected ingestor can handle directories
+                        first_detected = detected_ingestors[0]
+                        first_detected_plugin = None
+
+                        # Find the plugin class for the first detected ingestor
+                        for plugin in pm_ingestors:
+                            if plugin.name == first_detected:
+                                first_detected_plugin = plugin
+                                break
+
+                        # If the detected ingestor is file-only (can't handle directories),
+                        # use "all" ingestor as fallback to properly handle the directory structure
+                        if (
+                            first_detected_plugin
+                            and hasattr(first_detected_plugin, "autodetect_is_file")
+                            and first_detected_plugin.autodetect_is_file
+                            and not getattr(
+                                first_detected_plugin, "autodetect_is_dir", False
+                            )
+                        ):
+
+                            ingestor_name = "all"
+                            import logging
+
+                            logger = logging.getLogger(__name__)
+                            logger.info(
+                                f"Detected ingestor '{first_detected}' is file-only, using 'all' ingestor "
+                                f"to handle compressed file directory structure"
+                            )
+                        else:
+                            # Use the detected ingestor (it can handle directories or is not file-only)
+                            ingestor_name = first_detected
+
+                except Exception as e:
+                    return Response(
+                        {"error": f"Auto-detection failed: {str(e)}"},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    )
+
+            # Check if the ingestor exists (skip for auto-detect since we just set it)
+            if ingestor_name != "auto-detect" and ingestor_name not in [
+                plugin.name for plugin in pm_ingestors
+            ]:
+                return Response(
+                    {"error": f"Ingestor '{ingestor_name}' not found"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            # Safety check: If user manually selected a file-only ingestor but we have
+            # compressed files that were decompressed to directories, use "all" ingestor
+            if ingestor_name != "auto-detect" and has_compressed_files:
+                # Get the selected ingestor plugin
+                selected_plugin = None
+                for plugin in pm_ingestors:
+                    if plugin.name == ingestor_name:
+                        selected_plugin = plugin
+                        break
+
+                # Check if the selected ingestor is file-only
+                if (
+                    selected_plugin
+                    and hasattr(selected_plugin, "autodetect_is_file")
+                    and selected_plugin.autodetect_is_file
+                    and not getattr(selected_plugin, "autodetect_is_dir", False)
+                ):
+
+                    import logging
+
+                    logger = logging.getLogger(__name__)
+                    logger.info(
+                        f"User selected file-only ingestor '{ingestor_name}' but compressed files "
+                        f"require directory handling, using 'all' ingestor as fallback"
+                    )
+                    ingestor_name = "all"
+
+            # Get additional ingest parameters from request
+            ingest_kwargs = request.data.get("ingest_kwargs", {})
+
+            # Start the real ingest
+            db = CyberDB.from_default_config()
+            run_ingest_async(db, pm_ingestors, ingestor_name, files, ingest_kwargs)
+
+            return Response(
+                {
+                    "status": "Ingest started",
+                    "ingestor_name": ingestor_name,
+                    "total_files": len(files),
+                    "message": f"Ingest with {len(files)} file(s) has been initiated. Use WebSocket connection to monitor progress.",
+                },
+                status=status.HTTP_202_ACCEPTED,
+            )
+
+        else:
+            return Response(
+                {
+                    "error": "Either ingestor_name (for single ingest) or ingestor_names (for multi-ingest) is required"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    except Exception as e:
+        return Response(
+            {"error": f"Error starting ingest: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["GET"])
+def get_ingest_status(request):
+    """Get current ingest status"""
+    current_status = cache.get(
+        "current_ingest_status",
+        {
+            "status": "idle",
+            "ingestor_name": None,
+            "start_time": None,
+            "end_time": None,
+            "progress": 0,
+            "progress_bar": 0,
+            "progress_type": "indeterminate",
+            "current_portion": 0,
+            "total_portions": None,
+            "current_step": 0,
+            "total_steps": None,
+            "message": "No ingest running",
+            "results": None,
+            "error": None,
+        },
+    )
+
+    return Response(current_status)
+
+
+@api_view(["POST"])
+@parser_classes([MultiPartParser])
+def auto_detect_ingestors(request):
+    """Auto-detect suitable ingestors for uploaded files"""
+    if pm_ingestors is None:
+        return Response(
+            {"error": "Ingestors not available"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    try:
+        # Get uploaded files and create temporary files for autodetection
+        temp_files = []
+        files = {}
+        for key in request.FILES:
+            if key.startswith("files["):
+                file_obj = request.FILES[key]
+
+                # Check if the uploaded item is a folder
+                if file_obj.size == 0 and (
+                    not hasattr(file_obj, "content_type")
+                    or file_obj.content_type == "application/octet-stream"
+                ):
+                    return Response(
+                        {
+                            "error": f"Folder uploads are not supported. '{file_obj.name}' appears to be a folder. Please upload individual files only."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                file_content = file_obj.read()
+
+                # Decode bytes to text with proper encoding handling
+                try:
+                    if isinstance(file_content, bytes):
+                        try:
+                            file_text = file_content.decode("utf-8")
+                        except UnicodeDecodeError:
+                            file_text = file_content.decode("latin-1")
+                    else:
+                        file_text = file_content
+                except Exception:
+                    file_text = file_content.decode("utf-8", errors="replace")
+
+                # Create temporary file for autodetection
+                import tempfile
+                from pathlib import Path
+
+                temp_file = tempfile.NamedTemporaryFile(
+                    mode="w", delete=False, suffix=f"_{file_obj.name}"
+                )
+                try:
+                    temp_file.write(file_text)
+                    temp_file.flush()
+                    temp_file_path = Path(temp_file.name)
+                finally:
+                    temp_file.close()
+
+                temp_files.append(temp_file_path)
+                files[file_obj.name] = temp_file_path
+
+        if not files:
+            return Response(
+                {"error": "No files provided"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            detections = {}
+
+            # For each file, check which ingestors can handle it using autodetect_from_path
+            for filename, file_path in files.items():
+                suitable_ingestors = []
+
+                for plugin in pm_ingestors:
+                    try:
+                        # Use the real autodetect_from_path method from BaseIngestor
+                        if plugin.autodetect_from_path(file_path):
+                            suitable_ingestors.append(plugin.name)
+                    except Exception:
+                        # Skip ingestors that fail autodetection
+                        continue
+
+                detections[filename] = suitable_ingestors
+
+            return Response({"detections": detections})
+
+        finally:
+            # Clean up temporary files
+            import os
+
+            for temp_file_path in temp_files:
+                try:
+                    os.unlink(temp_file_path)
+                except Exception:
+                    pass
+
+    except Exception as e:
+        return Response(
+            {"error": f"Error during auto-detection: {str(e)}"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
@@ -1866,14 +2504,33 @@ def get_reporters(request):
 
 @api_view(["GET"])
 def get_ingestors(request):
-    """Get a list of all available ingestors"""
+    """Get a list of all available ingestors with metadata"""
     if pm_ingestors is None:
         return Response(
             {"error": "Ingestors not available"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
-    ingestors = [{"name": plugin.name} for plugin in pm_ingestors]
+    ingestors = []
+    for ingestor in pm_ingestors:
+        ingestor_info = {"name": ingestor.name}
+        if ingestor.metadata:
+            ingestor_info["description"] = (
+                ingestor.metadata.description
+                if ingestor.metadata.description is not None
+                else None
+            )
+        else:
+            ingestor_info["description"] = None
+
+        # Add autodetect capabilities if available
+        if hasattr(ingestor, "autodetect_is_file"):
+            ingestor_info["autodetect_is_file"] = ingestor.autodetect_is_file
+        if hasattr(ingestor, "autodetect_is_dir"):
+            ingestor_info["autodetect_is_dir"] = ingestor.autodetect_is_dir
+
+        ingestors.append(ingestor_info)
+
     return Response(ingestors)
 
 

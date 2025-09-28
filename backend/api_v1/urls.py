@@ -86,6 +86,9 @@ urlpatterns = [
     ),
     # Ingest endpoints
     path("ingest/plugins/", views.list_ingestors, name="list_ingestors"),
+    path("ingest/status/", views.get_ingest_status, name="get_ingest_status"),
+    path("ingest/", views.start_ingest, name="start_ingest"),
+    # General pattern with parameter MUST come last
     path("ingest/<str:ingestor_name>/", views.ingest_data, name="ingest_data"),
     # Report endpoints
     path(
@@ -100,6 +103,11 @@ urlpatterns = [
     # Plugin endpoints
     path("plugins/reporters/", views.get_reporters, name="get_reporters"),
     path("plugins/ingestors/", views.get_ingestors, name="get_ingestors"),
+    path(
+        "plugins/ingestors/autodetect/",
+        views.auto_detect_ingestors,
+        name="auto_detect_ingestors",
+    ),
     path("plugins/scanners/", views.get_scanners, name="get_scanners"),
     # Form endpoints
     path(

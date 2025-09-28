@@ -1,6 +1,7 @@
 import json
 import logging
 import operator
+import os
 import threading
 import time
 from datetime import datetime
@@ -9,11 +10,12 @@ from typing import Dict
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError
 from django.db.models import Q, QuerySet
 
-from .consumers import ScanStatusBroadcaster
+from .consumers import IngestStatusBroadcaster, ScanStatusBroadcaster
 
 
 def get_db(CyberDB):
@@ -968,10 +970,11 @@ def annotate_with_severity_confidence_labels(queryset, is_observation):
 class WebSocketLogHandler(logging.Handler):
     """Custom log handler that broadcasts log messages via WebSocket"""
 
-    def __init__(self, broadcast_func, scanner_name):
+    def __init__(self, broadcast_func, tool_name, tool_type="scanner"):
         super().__init__()
         self.broadcast_func = broadcast_func
-        self.scanner_name = scanner_name
+        self.tool_name = tool_name
+        self.tool_type = tool_type  # "scanner" or "ingestor"
         self.setLevel(logging.INFO)  # Capture INFO level and above
 
         # Set up formatter for readable log messages
@@ -983,23 +986,39 @@ class WebSocketLogHandler(logging.Handler):
         try:
             log_message = self.format(record)
 
-            # Broadcast log message to the scan status group
-            channel_layer = get_channel_layer()
-            if channel_layer:
-                async_to_sync(channel_layer.group_send)(
-                    "scan_status",
-                    {
-                        "type": "log_message",
-                        "data": {
-                            "scanner_name": self.scanner_name,
+            # Determine the appropriate channel group and data structure
+            if self.tool_type == "ingestor":
+                # Broadcast log message to the ingest status group
+                channel_layer = get_channel_layer()
+                if channel_layer:
+                    async_to_sync(channel_layer.group_send)(
+                        "ingest_status",
+                        {
+                            "type": "ingest_log_message",
+                            "ingestor_name": self.tool_name,
                             "level": record.levelname,
                             "message": log_message,
                             "timestamp": time.time(),
                         },
-                    },
-                )
+                    )
+            else:
+                # Broadcast log message to the scan status group (default behavior)
+                channel_layer = get_channel_layer()
+                if channel_layer:
+                    async_to_sync(channel_layer.group_send)(
+                        "scan_status",
+                        {
+                            "type": "log_message",
+                            "data": {
+                                "scanner_name": self.tool_name,
+                                "level": record.levelname,
+                                "message": log_message,
+                                "timestamp": time.time(),
+                            },
+                        },
+                    )
         except Exception:
-            # Don't let logging errors crash the scanner
+            # Don't let logging errors crash the tool
             pass
 
 
@@ -1138,7 +1157,7 @@ def run_scan_async(db, pm_cyberdb_scanner, scanner_name, scan_kwargs=None):
             scanner_instance = scanner_class(db)
 
             # Set up real-time log streaming
-            log_handler = WebSocketLogHandler(broadcast_func, scanner_name)
+            log_handler = WebSocketLogHandler(broadcast_func, scanner_name, "scanner")
             scanner_instance.logger.addHandler(log_handler)
             original_log_level = scanner_instance.logger.level
             # Temporarily lower log level to capture more logs during scan
@@ -1430,7 +1449,9 @@ def run_multiple_scans_async(db, pm_cyberdb_scanner, scanner_names, scan_kwargs=
                     scanner_instance = scanner_class(db)
 
                     # Set up real-time log streaming for current scanner
-                    log_handler = WebSocketLogHandler(broadcast_func, scanner_name)
+                    log_handler = WebSocketLogHandler(
+                        broadcast_func, scanner_name, "scanner"
+                    )
                     scanner_instance.logger.addHandler(log_handler)
                     original_log_level = scanner_instance.logger.level
                     scanner_instance.logger.setLevel(logging.INFO)
@@ -1703,5 +1724,490 @@ def run_multiple_scans_async(db, pm_cyberdb_scanner, scanner_names, scan_kwargs=
 
     # Run in thread to not block the request
     thread = threading.Thread(target=multiple_scans)
+    thread.daemon = True
+    thread.start()
+
+
+def run_ingest_async(db, pm_ingestors, ingestor_name, files, ingest_kwargs=None):
+    """Run a real ingest in a separate thread with WebSocket status updates"""
+    if ingest_kwargs is None:
+        ingest_kwargs = {}
+
+    def real_ingest():
+        ingest_complete_event = threading.Event()
+        ingestor_instance = None
+
+        try:
+            broadcast_func = async_to_sync(IngestStatusBroadcaster.broadcast_status)
+            start_time = datetime.now().isoformat()
+
+            # Validate ingestor exists
+            available_ingestors = [plugin.name for plugin in pm_ingestors]
+            if ingestor_name not in available_ingestors:
+                raise ValueError(f"Ingestor '{ingestor_name}' not found")
+
+            # Get ingestor instance for logging setup
+            ingestor_class = None
+            for plugin in pm_ingestors:
+                if plugin.name == ingestor_name:
+                    ingestor_class = plugin
+                    break
+
+            if ingestor_class:
+                ingestor_instance = ingestor_class(db)
+
+                # Set up real-time log streaming for ingestor
+                log_handler = WebSocketLogHandler(
+                    broadcast_func, ingestor_name, "ingestor"
+                )
+                ingestor_instance.logger.addHandler(log_handler)
+                original_log_level = ingestor_instance.logger.level
+                # Temporarily lower log level to capture more logs during ingest
+                ingestor_instance.logger.setLevel(logging.INFO)
+
+            # Broadcast ingest started
+            broadcast_func(
+                {
+                    "status": "running",
+                    "ingestor_name": ingestor_name,
+                    "start_time": start_time,
+                    "end_time": None,
+                    "progress": 0,
+                    "progress_type": "indeterminate",
+                    "current_portion": 0,
+                    "total_portions": len(files),
+                    "current_step": 0,
+                    "total_steps": None,
+                    "portion_label": f"Processing file 1 of {len(files)}",
+                    "step_label": None,
+                    "message": f"Initializing {ingestor_name} ingestor...",
+                    "results": None,
+                    "error": None,
+                }
+            )
+
+            # Process each file
+            for i, file_path in enumerate(files):
+                current_file_num = i + 1
+
+                broadcast_func(
+                    {
+                        "status": "running",
+                        "ingestor_name": ingestor_name,
+                        "start_time": start_time,
+                        "end_time": None,
+                        "progress": int((i / len(files)) * 100),
+                        "progress_bar": int((i / len(files)) * 100),
+                        "current_portion": current_file_num,
+                        "total_portions": len(files),
+                        "current_step": 0,
+                        "total_steps": None,
+                        "portion_label": f"Processing file {current_file_num} of {len(files)}",
+                        "step_label": "Ingesting file data...",
+                        "message": f"Processing file {current_file_num} with {ingestor_name}...",
+                        "results": None,
+                        "error": None,
+                    }
+                )
+
+                # Run the ingestor on this file using the CyberDB ingest method
+                db.ingest(ingestor_name, file_path)
+
+                # Clean up temporary file
+                try:
+                    os.unlink(file_path)
+                except OSError:
+                    pass  # Ignore cleanup errors
+
+            # Mark as completed
+            end_time = datetime.now().isoformat()
+            ingest_complete_event.set()
+
+            # Clean up log handler
+            if ingestor_instance:
+                ingestor_instance.logger.removeHandler(log_handler)
+                ingestor_instance.logger.setLevel(original_log_level)
+
+            # Broadcast completion
+            broadcast_func(
+                {
+                    "status": "completed",
+                    "ingestor_name": ingestor_name,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "progress": 100,
+                    "progress_bar": 100,
+                    "current_portion": len(files),
+                    "total_portions": len(files),
+                    "current_step": None,
+                    "total_steps": None,
+                    "portion_label": f"Completed {len(files)} files",
+                    "step_label": None,
+                    "message": f"Ingest completed successfully. Processed {len(files)} file(s).",
+                    "results": None,
+                    "error": None,
+                }
+            )
+
+            # Update cache
+            cache.set(
+                "current_ingest_status",
+                {
+                    "status": "completed",
+                    "ingestor_name": ingestor_name,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "progress": 100,
+                    "progress_bar": 100,
+                    "current_portion": len(files),
+                    "total_portions": len(files),
+                    "message": f"Ingest completed successfully. Processed {len(files)} file(s).",
+                    "results": None,
+                    "error": None,
+                },
+                timeout=3600,  # Keep results for 1 hour
+            )
+
+        except Exception as e:
+            error_msg = str(e)
+            end_time = datetime.now().isoformat()
+            ingest_complete_event.set()
+
+            # Clean up log handler
+            if ingestor_instance:
+                ingestor_instance.logger.removeHandler(log_handler)
+                ingestor_instance.logger.setLevel(original_log_level)
+
+            # Broadcast error
+            broadcast_func(
+                {
+                    "status": "failed",
+                    "ingestor_name": ingestor_name,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "progress": 0,
+                    "progress_bar": 0,
+                    "current_portion": 0,
+                    "total_portions": len(files),
+                    "current_step": None,
+                    "total_steps": None,
+                    "portion_label": None,
+                    "step_label": None,
+                    "message": f"Ingest failed: {error_msg}",
+                    "results": None,
+                    "error": error_msg,
+                }
+            )
+
+            # Update cache
+            cache.set(
+                "current_ingest_status",
+                {
+                    "status": "failed",
+                    "ingestor_name": ingestor_name,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "progress": 0,
+                    "progress_bar": 0,
+                    "current_portion": 0,
+                    "total_portions": len(files),
+                    "message": f"Ingest failed: {error_msg}",
+                    "results": None,
+                    "error": error_msg,
+                },
+                timeout=3600,  # Keep error for 1 hour
+            )
+
+    # Run in thread to not block the request
+    thread = threading.Thread(target=real_ingest)
+    thread.daemon = True
+    thread.start()
+
+
+def run_multiple_ingests_async(
+    db, pm_ingestors, ingestor_names, files, ingest_kwargs=None
+):
+    """Run multiple ingests sequentially in a separate thread with WebSocket status updates"""
+    if ingest_kwargs is None:
+        ingest_kwargs = {}
+
+    def multiple_ingests():
+        try:
+            broadcast_func = async_to_sync(IngestStatusBroadcaster.broadcast_status)
+            start_time = datetime.now().isoformat()
+
+            # Validate all ingestors exist
+            available_ingestors = [plugin.name for plugin in pm_ingestors]
+            invalid_ingestors = [
+                name for name in ingestor_names if name not in available_ingestors
+            ]
+
+            if invalid_ingestors:
+                raise ValueError(f"Ingestors not found: {', '.join(invalid_ingestors)}")
+
+            # Broadcast multi-ingest started
+            broadcast_func(
+                {
+                    "status": "running",
+                    "ingestor_names": ingestor_names,
+                    "multi_ingest": True,
+                    "current_ingestor": ingestor_names[0] if ingestor_names else None,
+                    "ingested_ingestors": [],
+                    "start_time": start_time,
+                    "end_time": None,
+                    "progress": 0,
+                    "progress_bar": 0,
+                    "current_portion": 0,
+                    "total_portions": len(ingestor_names),
+                    "current_step": 0,
+                    "total_steps": len(files),
+                    "portion_label": f"Ingestor 1 of {len(ingestor_names)}",
+                    "step_label": f"Processing {len(files)} files",
+                    "message": f"Starting multi-ingest with {len(ingestor_names)} ingestors...",
+                    "results": None,
+                    "error": None,
+                }
+            )
+
+            all_ingest_details = []
+            ingested_ingestors = []
+
+            # Process each ingestor
+            for i, ingestor_name in enumerate(ingestor_names):
+                current_ingestor_num = i + 1
+
+                broadcast_func(
+                    {
+                        "status": "running",
+                        "ingestor_names": ingestor_names,
+                        "multi_ingest": True,
+                        "current_ingestor": ingestor_name,
+                        "ingested_ingestors": ingested_ingestors.copy(),
+                        "start_time": start_time,
+                        "end_time": None,
+                        "progress": int((i / len(ingestor_names)) * 100),
+                        "progress_bar": int((i / len(ingestor_names)) * 100),
+                        "current_portion": current_ingestor_num,
+                        "total_portions": len(ingestor_names),
+                        "current_step": 0,
+                        "total_steps": len(files),
+                        "portion_label": f"Ingestor {current_ingestor_num} of {len(ingestor_names)}",
+                        "step_label": f"Processing {len(files)} files with {ingestor_name}",
+                        "message": f"Running ingest {current_ingestor_num}/{len(ingestor_names)}: {ingestor_name}",
+                        "results": None,
+                        "error": None,
+                    }
+                )
+
+                try:
+                    # Validate ingestor exists
+                    available_ingestors = [plugin.name for plugin in pm_ingestors]
+                    if ingestor_name not in available_ingestors:
+                        raise ValueError(f"Ingestor '{ingestor_name}' not found")
+
+                    # Get ingestor instance for logging setup
+                    ingestor_instance = None
+                    log_handler = None
+                    original_log_level = None
+
+                    ingestor_class = None
+                    for plugin in pm_ingestors:
+                        if plugin.name == ingestor_name:
+                            ingestor_class = plugin
+                            break
+
+                    if ingestor_class:
+                        ingestor_instance = ingestor_class(db)
+
+                        # Set up real-time log streaming for ingestor
+                        log_handler = WebSocketLogHandler(
+                            broadcast_func, ingestor_name, "ingestor"
+                        )
+                        ingestor_instance.logger.addHandler(log_handler)
+                        original_log_level = ingestor_instance.logger.level
+                        # Temporarily lower log level to capture more logs during ingest
+                        ingestor_instance.logger.setLevel(logging.INFO)
+
+                    # Process all files with this ingestor
+                    for j, file_path in enumerate(files):
+                        broadcast_func(
+                            {
+                                "status": "running",
+                                "ingestor_names": ingestor_names,
+                                "multi_ingest": True,
+                                "current_ingestor": ingestor_name,
+                                "ingested_ingestors": ingested_ingestors.copy(),
+                                "start_time": start_time,
+                                "end_time": None,
+                                "progress": int((i / len(ingestor_names)) * 100),
+                                "progress_bar": int(
+                                    (
+                                        (i * len(files) + j)
+                                        / (len(ingestor_names) * len(files))
+                                    )
+                                    * 100
+                                ),
+                                "current_portion": current_ingestor_num,
+                                "total_portions": len(ingestor_names),
+                                "current_step": j + 1,
+                                "total_steps": len(files),
+                                "portion_label": f"Ingestor {current_ingestor_num} of {len(ingestor_names)}",
+                                "step_label": f"File {j + 1} of {len(files)}",
+                                "message": f"Processing file {j + 1}/{len(files)} with {ingestor_name}",
+                                "results": None,
+                                "error": None,
+                            }
+                        )
+
+                        db.ingest(ingestor_name, file_path)
+
+                    # Clean up log handler for this ingestor
+                    if ingestor_instance and log_handler:
+                        ingestor_instance.logger.removeHandler(log_handler)
+                        ingestor_instance.logger.setLevel(original_log_level)
+
+                    ingest_detail = {
+                        "name": ingestor_name,
+                        "status": "completed",
+                        "results": None,
+                        "files_processed": len(files),
+                        "error": None,
+                    }
+
+                    all_ingest_details.append(ingest_detail)
+                    ingested_ingestors.append(ingestor_name)
+
+                except Exception as e:
+                    # Clean up log handler for this ingestor
+                    if ingestor_instance and log_handler:
+                        ingestor_instance.logger.removeHandler(log_handler)
+                        ingestor_instance.logger.setLevel(original_log_level)
+
+                    ingest_detail = {
+                        "name": ingestor_name,
+                        "status": "failed",
+                        "results": None,
+                        "files_processed": 0,
+                        "error": str(e),
+                    }
+                    all_ingest_details.append(ingest_detail)
+                    # Continue with next ingestor even if this one failed
+
+            # Mark multi-ingest as completed
+            end_time = datetime.now().isoformat()
+
+            broadcast_func(
+                {
+                    "status": "completed",
+                    "ingestor_names": ingestor_names,
+                    "multi_ingest": True,
+                    "current_ingestor": None,
+                    "ingested_ingestors": ingested_ingestors,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "progress": 100,
+                    "progress_bar": 100,
+                    "current_portion": len(ingestor_names),
+                    "total_portions": len(ingestor_names),
+                    "current_step": len(files),
+                    "total_steps": len(files),
+                    "portion_label": f"Completed {len(ingestor_names)} ingestors",
+                    "step_label": f"Processed {len(files)} files",
+                    "message": f"Multi-ingest completed. Processed {len(files)} files with {len(ingestor_names)} ingestors.",
+                    "results": all_ingest_details,
+                    "error": None,
+                }
+            )
+
+            # Update cache
+            cache.set(
+                "current_ingest_status",
+                {
+                    "status": "completed",
+                    "ingestor_names": ingestor_names,
+                    "multi_ingest": True,
+                    "current_ingestor": None,
+                    "ingested_ingestors": ingested_ingestors,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "progress": 100,
+                    "progress_bar": 100,
+                    "current_portion": len(ingestor_names),
+                    "total_portions": len(ingestor_names),
+                    "message": f"Multi-ingest completed. Processed {len(files)} files with {len(ingestor_names)} ingestors.",
+                    "results": all_ingest_details,
+                    "error": None,
+                },
+                timeout=3600,  # Keep results for 1 hour
+            )
+
+            # Clean up temporary files
+            for file_path in files:
+                try:
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                except Exception as cleanup_error:
+                    pass  # Continue even if cleanup fails
+
+        except Exception as e:
+            error_msg = str(e)
+            end_time = datetime.now().isoformat()
+
+            # Broadcast error
+            broadcast_func(
+                {
+                    "status": "failed",
+                    "ingestor_names": ingestor_names,
+                    "multi_ingest": True,
+                    "current_ingestor": None,
+                    "ingested_ingestors": [],
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "progress": 0,
+                    "progress_bar": 0,
+                    "current_portion": 0,
+                    "total_portions": len(ingestor_names),
+                    "current_step": 0,
+                    "total_steps": len(files) if files else 0,
+                    "portion_label": None,
+                    "step_label": None,
+                    "message": f"Multi-ingest failed: {error_msg}",
+                    "results": None,
+                    "error": error_msg,
+                }
+            )
+
+            # Update cache
+            cache.set(
+                "current_ingest_status",
+                {
+                    "status": "failed",
+                    "ingestor_names": ingestor_names,
+                    "multi_ingest": True,
+                    "current_ingestor": None,
+                    "ingested_ingestors": [],
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "progress": 0,
+                    "progress_bar": 0,
+                    "current_portion": 0,
+                    "total_portions": len(ingestor_names),
+                    "message": f"Multi-ingest failed: {error_msg}",
+                    "results": None,
+                    "error": error_msg,
+                },
+                timeout=3600,  # Keep error for 1 hour
+            )
+
+            # Clean up temporary files even on error
+            for file_path in files:
+                try:
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                except Exception as cleanup_error:
+                    pass  # Continue even if cleanup fails
+
+    # Run in thread to not block the request
+    thread = threading.Thread(target=multiple_ingests)
     thread.daemon = True
     thread.start()
