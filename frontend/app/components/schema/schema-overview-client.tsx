@@ -138,6 +138,10 @@ export function SchemaOverview({ entities, categories, tags }: SchemaOverviewPro
             <SchemaFilters
                 categories={categories}
                 tags={tags}
+                searchQuery={searchQuery}
+                selectedCategories={selectedCategories}
+                selectedTags={selectedTags}
+                hasActiveFilters={hasActiveFilters}
                 onFiltersChange={handleFiltersChange}
             />
 
