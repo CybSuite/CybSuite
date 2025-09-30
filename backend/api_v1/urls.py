@@ -109,6 +109,9 @@ urlpatterns = [
         name="auto_detect_ingestors",
     ),
     path("plugins/scanners/", views.get_scanners, name="get_scanners"),
+    path("plugins/formatters/", views.get_formatters, name="get_formatters"),
+    # Export endpoints
+    path("export/<str:entity>/", views.export_entity_data, name="export_entity_data"),
     # Form endpoints
     path(
         "form/schema/<str:entity>/",

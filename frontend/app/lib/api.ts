@@ -973,6 +973,60 @@ export const serverApi = {
         error: string | null;
       }>("/api/v1/scan/status/"),
   },
+
+  // Formatter endpoints
+  formatters: {
+    getFormatters: () =>
+      apiClient.get<Array<{ name: string; description: string | null }>>(
+        "/api/v1/plugins/formatters/"
+      ),
+    exportData: async (
+      entity: string,
+      options: {
+        format: string;
+        fields: string[];
+        recordIds?: number[];
+        exportAll?: boolean;
+      }
+    ) => {
+      const response = await fetch(`${API_BASE_URL}/api/v1/export/${entity}/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          format: options.format,
+          fields: options.fields,
+          record_ids: options.recordIds,
+          export_all: options.exportAll || false,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Export failed");
+      }
+
+      // Get filename from response headers
+      const contentDisposition = response.headers.get("content-disposition");
+      const filename = contentDisposition
+        ? contentDisposition.split("filename=")[1]?.replace(/"/g, "")
+        : `${entity}_export.${options.format}`;
+
+      // Create and trigger download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      return { success: true, filename };
+    },
+  },
 };
 
 export default apiClient;

@@ -1,6 +1,5 @@
 import { Suspense } from 'react'
-import { AlertCircle, RefreshCw } from 'lucide-react'
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { RefreshCw } from 'lucide-react'
 import { Scanner } from '@/app/components/features/ScannersList'
 import ScannersManager from '@/app/components/features/ScannersManager'
 import { api } from '@/app/lib/api'
@@ -36,7 +35,7 @@ export default async function ScannersPage() {
 }
 
 // Server action to fetch scanners
-export async function getScannersData(): Promise<Scanner[]> {
+async function getScannersData(): Promise<Scanner[]> {
 	try {
 		const response = await api.scanners.getScanners()
 
@@ -50,18 +49,4 @@ export async function getScannersData(): Promise<Scanner[]> {
 		console.error('Error fetching scanners:', error)
 		return []
 	}
-}
-
-// Error boundary component for server-side errors
-export function ErrorBoundary({ error }: { error: Error }) {
-	return (
-		<div className="container mx-auto p-6">
-			<Alert>
-				<AlertCircle className="h-4 w-4" />
-				<AlertDescription>
-					Error loading scanners page: {error.message}
-				</AlertDescription>
-			</Alert>
-		</div>
-	)
 }
