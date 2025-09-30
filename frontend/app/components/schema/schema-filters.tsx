@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { Input } from '../../../components/ui/input';
 import { Badge } from '../../../components/ui/badge';
 import { Button } from '../../../components/ui/button';
@@ -17,6 +16,10 @@ import { Search, X, Filter } from 'lucide-react';
 interface SchemaFiltersProps {
     categories: string[];
     tags: string[];
+    selectedCategories: string[];
+    selectedTags: string[];
+    searchQuery: string;
+    hasActiveFilters?: boolean;
     onFiltersChange: (filters: {
         selectedCategories: string[];
         selectedTags: string[];
@@ -24,13 +27,7 @@ interface SchemaFiltersProps {
     }) => void;
 }
 
-export function SchemaFilters({ categories, tags, onFiltersChange }: SchemaFiltersProps) {
-    const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-    const [selectedTags, setSelectedTags] = useState<string[]>([]);
-    const [searchQuery, setSearchQuery] = useState('');
-
-    const hasActiveFilters = selectedCategories.length > 0 || selectedTags.length > 0 || searchQuery.trim().length > 0;
-
+export function SchemaFilters({ categories, tags, selectedCategories, selectedTags, searchQuery, hasActiveFilters, onFiltersChange }: SchemaFiltersProps) {
     // Notify parent component of filter changes
     const notifyFiltersChange = (newCategories = selectedCategories, newTags = selectedTags, newSearch = searchQuery) => {
         onFiltersChange({
@@ -41,24 +38,18 @@ export function SchemaFilters({ categories, tags, onFiltersChange }: SchemaFilte
     };
 
     const handleCategoryChange = (newCategories: string[]) => {
-        setSelectedCategories(newCategories);
         notifyFiltersChange(newCategories, selectedTags, searchQuery);
     };
 
     const handleTagChange = (newTags: string[]) => {
-        setSelectedTags(newTags);
         notifyFiltersChange(selectedCategories, newTags, searchQuery);
     };
 
     const handleSearchChange = (newSearch: string) => {
-        setSearchQuery(newSearch);
         notifyFiltersChange(selectedCategories, selectedTags, newSearch);
     };
 
     const clearFilters = () => {
-        setSelectedCategories([]);
-        setSelectedTags([]);
-        setSearchQuery('');
         notifyFiltersChange([], [], '');
     };
 

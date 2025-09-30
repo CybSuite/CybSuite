@@ -165,7 +165,7 @@ export function Navigation({ navigationData }: NavigationProps) {
 									>
 										{menuItem.name}
 									</NavigationMenuTrigger>
-									<NavigationMenuContent>
+									<NavigationMenuContent className="z-50">
 										<div className="grid w-[400px] gap-3 p-4 md:w-[500px] md:grid-cols-2 lg:w-[600px]">
 											{menuItem.items.map((item, itemIndex) => (
 												<NavigationMenuLink key={`${uniqueKey}-item-${itemIndex}-${item.name}`} asChild>
