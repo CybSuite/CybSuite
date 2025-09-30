@@ -1,6 +1,5 @@
 import { Suspense } from 'react'
-import { AlertCircle, RefreshCw } from 'lucide-react'
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { RefreshCw } from 'lucide-react'
 import { Ingestor } from '@/app/components/features/IngestorsList'
 import IngestorsManager from '@/app/components/features/IngestorsManager'
 import { api } from '@/app/lib/api'
@@ -36,7 +35,7 @@ export default async function IngestorsPage() {
 }
 
 // Server action to fetch ingestors
-export async function getIngestorsData(): Promise<Ingestor[]> {
+async function getIngestorsData(): Promise<Ingestor[]> {
 	try {
 		const response = await api.ingestors.getIngestors()
 
@@ -50,18 +49,4 @@ export async function getIngestorsData(): Promise<Ingestor[]> {
 		console.error('Error fetching ingestors:', error)
 		return []
 	}
-}
-
-// Error boundary component for server-side errors
-export function ErrorBoundary({ error }: { error: Error }) {
-	return (
-		<div className="container mx-auto p-6">
-			<Alert>
-				<AlertCircle className="h-4 w-4" />
-				<AlertDescription>
-					Error loading ingestors page: {error.message}
-				</AlertDescription>
-			</Alert>
-		</div>
-	)
 }

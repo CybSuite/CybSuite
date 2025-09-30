@@ -60,23 +60,31 @@ export interface CybsuiteTableProps<TData> {
     // External row selection control
     rowSelection?: RowSelectionState;
     onRowSelectionChange?: (rowSelection: RowSelectionState) => void;
+    // Table state callback for export functionality
+    onTableStateChange?: (state: {
+        columnFilters: any[];
+        globalFilter: any;
+        filteredRowCount: number;
+        filteredRecords: any[];
+    }) => void;
 }
 
 export default function CybsuiteTable<TData extends { id?: string | number }>({
     data,
-    columns: providedColumns,
-    currentEntity,
+    columns: providedColumns = [],
+    currentEntity = "",
     pageSize = 10,
     enableSorting = true,
     enableFiltering = true,
     enablePagination = true,
-    enableRowSelection = true,
+    enableRowSelection = false,
     enableGlobalSearch = true,
     onRowAction,
-    tableId = "default",
+    tableId = "data-table",
     initialColumnVisibility = {},
     rowSelection: externalRowSelection,
-    onRowSelectionChange: externalOnRowSelectionChange
+    onRowSelectionChange: externalOnRowSelectionChange,
+    onTableStateChange,
 }: CybsuiteTableProps<TData>) {
 
     // Track if component is mounted to prevent SSR hydration issues
@@ -463,6 +471,21 @@ export default function CybsuiteTable<TData extends { id?: string | number }>({
         manualSorting: false,
         manualFiltering: false,
     });
+
+    // Notify parent of table state changes for export functionality
+    React.useEffect(() => {
+        if (onTableStateChange && isMounted) {
+            const tableState = table.getState();
+            const filteredRows = table.getFilteredRowModel().rows;
+
+            onTableStateChange({
+                columnFilters: tableState.columnFilters,
+                globalFilter: tableState.globalFilter,
+                filteredRowCount: filteredRows.length,
+                filteredRecords: filteredRows.map(row => row.original)
+            });
+        }
+    }, [onTableStateChange, table, isMounted, columnFilters, globalFilter]);
 
     const selectedRowsCount = React.useMemo(() => {
         if (!isMounted) return 0;

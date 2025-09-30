@@ -15,7 +15,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError
 from django.db.models import Count, F, Prefetch, Q, Value
 from django.db.models.functions import Coalesce
-from django.http import FileResponse
+from django.http import FileResponse, HttpResponse
 from rest_framework import status
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import MultiPartParser
@@ -53,6 +53,7 @@ try:
         pm_ingestors,
         pm_reporters,
     )
+    from cybsuite.cyberdb.bases.base_formatter import pm_formatters
 except ImportError:
     # Fallback or mock for development
     cyberdb_schema = None
@@ -60,6 +61,7 @@ except ImportError:
     pm_ingestors = None
     pm_reporters = None
     pm_cyberdb_scanner = None
+    pm_formatters = None
 
 # TODO: remove these temporary placeholders:
 example_categories = ["pentest", "network", "vulnerability"]
@@ -2562,6 +2564,218 @@ def get_scanners(request):
         db_scanners.append(scanner_info)
 
     return Response(db_scanners)
+
+
+@api_view(["GET"])
+def get_formatters(request):
+    """Get a list of all available data formatters"""
+    if pm_formatters is None:
+        return Response(
+            {"error": "Formatters not available"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    formatters = []
+    for plugin in pm_formatters:
+        formatter_info = {"name": plugin.name}
+        if hasattr(plugin, "metadata") and plugin.metadata:
+            formatter_info["description"] = (
+                plugin.metadata.description
+                if plugin.metadata.description is not None
+                else None
+            )
+        else:
+            formatter_info["description"] = None
+        formatters.append(formatter_info)
+
+    return Response(formatters)
+
+
+@api_view(["POST"])
+def export_entity_data(request, entity):
+    """Export entity data in the specified format"""
+    db = CyberDB.from_default_config()
+    if db is None or pm_formatters is None:
+        return Response(
+            {"error": "CyberDB or formatters not available"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    try:
+        # Get parameters from request
+        format_name = request.data.get("format")
+        fields = request.data.get("fields", [])
+        export_scope = request.data.get("export_scope", "all")
+        include_filters = request.data.get("include_filters", False)
+        server_filters = request.data.get("server_filters")
+        available_record_ids = request.data.get("available_record_ids", [])
+        record_ids = request.data.get("record_ids", [])
+
+        # Legacy support - only override if legacy parameters are explicitly provided
+        export_all = request.data.get("export_all")
+        if export_all is not None:
+            # Legacy mode: use export_all to determine scope
+            export_scope = "all" if export_all else "selected"
+
+        if not format_name:
+            return Response(
+                {"error": "Format name is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Find the formatter plugin
+        formatter_plugin = None
+        for plugin in pm_formatters:
+            if plugin.name == format_name:
+                formatter_plugin = plugin
+                break
+
+        if not formatter_plugin:
+            return Response(
+                {"error": f"Formatter '{format_name}' not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Get the entity model and queryset
+        entity_desc = cyberdb_schema[entity]
+        queryset = db.request(entity)
+
+        # Build filtered queryset based on export scope
+        if export_scope == "all":
+            # Use all records - but for client-managed tables, respect available_record_ids
+            if available_record_ids:
+                # Client-managed table: use the provided available record IDs
+                queryset = queryset.filter(id__in=available_record_ids)
+            elif include_filters and server_filters:
+                # Server-managed table: apply server-side filters using the same logic as get_entity_data
+                filters = server_filters.get("filters", {})
+                search = server_filters.get("search", "")
+
+                # Construct table_params tuple like get_entity_data does
+                table_params = (
+                    0,  # skip
+                    0,  # limit (no limit for export)
+                    search,  # legacy search
+                    None,  # legacy filters
+                    None,  # sort_by
+                    False,  # sort_desc
+                    search,  # server_search
+                    json.dumps(filters)
+                    if filters
+                    else None,  # server_filters (JSON string)
+                    False,  # flatten_dict_param
+                )
+
+                # Use the same filtering logic as get_entity_data
+                entity_desc = cyberdb_schema[entity]
+                dict_field_names = []
+                for field_desc in entity_desc:
+                    if field_desc.annotation is dict or field_desc.annotation is Dict:
+                        dict_field_names.append(field_desc.name)
+
+                (queryset, filtered_count, _, _) = filter_data_table_queryset(
+                    queryset, table_params, dict_field_names
+                )
+            # else: use all records from database (server-managed, no filters)
+
+        elif export_scope == "filtered":
+            # Use filtered records - either from server filters or client-provided IDs
+            if include_filters and server_filters:
+                # Apply server-side filters using the same logic as get_entity_data
+                filters = server_filters.get("filters", {})
+                search = server_filters.get("search", "")
+
+                # Construct table_params tuple like get_entity_data does
+                table_params = (
+                    0,  # skip
+                    0,  # limit (no limit for export)
+                    search,  # legacy search
+                    None,  # legacy filters
+                    None,  # sort_by
+                    False,  # sort_desc
+                    search,  # server_search
+                    json.dumps(filters)
+                    if filters
+                    else None,  # server_filters (JSON string)
+                    False,  # flatten_dict_param
+                )
+
+                # Use the same filtering logic as get_entity_data
+                entity_desc = cyberdb_schema[entity]
+                dict_field_names = []
+                for field_desc in entity_desc:
+                    if field_desc.annotation is dict or field_desc.annotation is Dict:
+                        dict_field_names.append(field_desc.name)
+
+                (queryset, filtered_count, _, _) = filter_data_table_queryset(
+                    queryset, table_params, dict_field_names
+                )
+            elif available_record_ids:
+                # Use client-provided filtered record IDs
+                queryset = queryset.filter(id__in=available_record_ids)
+            else:
+                return Response(
+                    {
+                        "error": "For filtered export, either server filters or available record IDs must be provided"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        elif export_scope == "selected":
+            # Use selected records
+            if record_ids:
+                queryset = queryset.filter(id__in=record_ids)
+            else:
+                return Response(
+                    {"error": "For selected export, record_ids must be provided"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            return Response(
+                {
+                    "error": f"Invalid export_scope: {export_scope}. Must be 'all', 'filtered', or 'selected'"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Get field names if not provided
+        if not fields:
+            fields = [
+                field.name for field in entity_desc if not field.name.startswith("_")
+            ]
+
+        # Convert queryset to list of dicts
+        data = []
+        for obj in queryset:
+            record = {}
+            serialized = serialize_model(cyberdb_schema, obj, entity)
+            for field_name in fields:
+                record[field_name] = serialized.get(field_name)
+            data.append(record)
+
+        # Create HTTP response with appropriate content type
+        response = HttpResponse(content_type="application/octet-stream")
+
+        # Set filename based on format
+        filename = f"{entity}_export.{format_name}"
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+
+        # Use the formatter to write data
+        formatter_instance = formatter_plugin()
+        formatter_instance.format(data, response, fields)
+
+        return response
+
+    except KeyError:
+        return Response(
+            {"error": f"Entity '{entity}' not found"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except Exception as e:
+        return Response(
+            {"error": f"Export failed: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
 # Additional Endpoints

@@ -9,6 +9,7 @@ import { DataTableColumnHeader } from "@/components/data-table/data-table-column
 import { RelationLink } from "@/app/components/data/RelationLink";
 import { EntityFormDialog } from "@/app/components/data/form/EntityFormDialog";
 import { BulkUpdateDialog } from "@/app/components/data/form/BulkUpdateDialog";
+import { ExportDialog, type ExportData } from "./ExportDialog";
 import { api } from "@/app/lib/api";
 import { EntityRecord, EntitySchema } from "@/app/types/Data";
 import {
@@ -19,7 +20,7 @@ import {
 	getFilterOptions,
 	fetchRelationOptions
 } from "@/app/lib/schema-utils";
-import { AlertCircle, RefreshCw, ExternalLink, Trash2, TableProperties } from "lucide-react";
+import { AlertCircle, RefreshCw, ExternalLink, Trash2, TableProperties, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -240,6 +241,50 @@ export default function ModelDataTable({
 
 	// Row selection state
 	const [rowSelection, setRowSelection] = React.useState<Record<string, boolean>>({});
+
+	// Export dialog state
+	const [exportDialogOpen, setExportDialogOpen] = React.useState(false);
+	const [exportSelectedRecords, setExportSelectedRecords] = React.useState<EntityRecord[]>([]);
+	const [hasClientFilters, setHasClientFilters] = React.useState(false);
+
+	// Client table state tracking for proper filter detection
+	const [clientTableState, setClientTableState] = React.useState<{
+		columnFilters: any[];
+		globalFilter: any;
+		filteredRowCount: number;
+		filteredRecords: any[];
+	} | null>(null);
+
+	// Handle client table state changes
+	const handleClientTableStateChange = React.useCallback((state: {
+		columnFilters: any[];
+		globalFilter: any;
+		filteredRowCount: number;
+		filteredRecords: any[];
+	}) => {
+		setClientTableState(state);
+		// Update hasClientFilters based on actual table state
+		const globalFilterValue = state.globalFilter || '';
+
+		// Check for active filters - handle both simple string and advanced filter object
+		let hasActiveFilters = state.columnFilters.length > 0;
+
+		if (!hasActiveFilters && globalFilterValue) {
+			if (typeof globalFilterValue === 'string') {
+				hasActiveFilters = globalFilterValue.trim() !== '';
+			} else if (typeof globalFilterValue === 'object' && globalFilterValue !== null) {
+				// Handle advanced filter object structure
+				const filterObj = globalFilterValue as any;
+				if (filterObj.advancedFilters && Array.isArray(filterObj.advancedFilters)) {
+					hasActiveFilters = filterObj.advancedFilters.length > 0;
+				}
+			}
+		}
+
+		setHasClientFilters(hasActiveFilters);
+	}, []);
+
+	// Note: Client table filter detection is handled via handleClientTableStateChange callback
 
 	// Fetch schema if not provided
 	const fetchSchema = React.useCallback(async () => {
@@ -626,8 +671,9 @@ export default function ModelDataTable({
 				setDeleteDialogOpen(true);
 				break;
 			case 'export':
-				console.log('Export rows:', rows);
-				// Implement export functionality
+				// Open export dialog with selected records
+				setExportSelectedRecords(rows);
+				setExportDialogOpen(true);
 				break;
 		}
 	}, [model, router]);
@@ -759,6 +805,53 @@ export default function ModelDataTable({
 		setRecordsToDelete([]);
 	}, []);
 
+	// Handle export
+	const handleExport = React.useCallback(async (exportData: ExportData) => {
+		try {
+			const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/export/${model}/`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					format: exportData.format,
+					fields: exportData.fields,
+					export_scope: exportData.exportScope,
+					include_filters: exportData.includeFilters,
+					server_filters: exportData.serverFilters,
+					available_record_ids: exportData.availableRecordIds,
+					record_ids: exportData.recordIds,
+				}),
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error || 'Export failed');
+			}
+
+			// Get filename from response headers
+			const contentDisposition = response.headers.get('content-disposition');
+			const filename = contentDisposition
+				? contentDisposition.split('filename=')[1]?.replace(/"/g, '')
+				: `${model}_export.${exportData.format}`;
+
+			// Create and trigger download
+			const blob = await response.blob();
+			const url = window.URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = filename;
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+			window.URL.revokeObjectURL(url);
+		} catch (error) {
+			console.error('Export failed:', error);
+			// You might want to show a toast notification here
+			throw error; // Re-throw to let ExportDialog handle the error
+		}
+	}, [model]);
+
 	// Retry function
 	const retry = React.useCallback(() => {
 		fetchSchema();
@@ -838,6 +931,19 @@ export default function ModelDataTable({
 						</Button>
 					)}
 
+					{/* Export Button */}
+					<Button
+						onClick={() => {
+							setExportSelectedRecords([]);
+							setExportDialogOpen(true);
+						}}
+						variant="outline"
+						size="lg"
+					>
+						<Download className="h-4 w-4 mr-2" />
+						Export
+					</Button>
+
 					{showSchemaButton && (
 						<Link href={`/schema#entity-${model}`}>
 							<Button variant="outline" size="lg">
@@ -892,6 +998,7 @@ export default function ModelDataTable({
 						initialColumnVisibility={columnVisibility}
 						rowSelection={rowSelection}
 						onRowSelectionChange={setRowSelection}
+						onTableStateChange={handleClientTableStateChange}
 					/>
 				)
 			) : (schema || initialSchema) ? (
@@ -939,6 +1046,7 @@ export default function ModelDataTable({
 						initialColumnVisibility={{}}
 						rowSelection={rowSelection}
 						onRowSelectionChange={setRowSelection}
+						onTableStateChange={handleClientTableStateChange}
 					/>
 				)
 			) : (
@@ -1052,6 +1160,34 @@ export default function ModelDataTable({
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
+
+			{/* Export Dialog */}
+			<ExportDialog
+				open={exportDialogOpen}
+				onOpenChange={setExportDialogOpen}
+				entity={model}
+				selectedRecords={exportSelectedRecords}
+				schema={schema}
+				onExport={handleExport}
+				isServerManaged={isServerManaged}
+				availableRecords={
+					!isServerManaged && hasClientFilters && clientTableState?.filteredRecords
+						? clientTableState.filteredRecords
+						: data
+				}
+				currentFilters={currentFilters}
+				currentSearch={currentSearch}
+				hasActiveFilters={
+					isServerManaged ?
+						(Object.keys(currentFilters).length > 0 || currentSearch.length > 0) :
+						hasClientFilters
+				}
+				totalFilteredRecords={
+					isServerManaged ?
+						filteredCount || totalCount :
+						(clientTableState?.filteredRowCount ?? data.length)
+				}
+			/>
 		</div>
 	);
 }
