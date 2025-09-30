@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import control_views, views
+from . import views
 
 app_name = "api_v1"
 
@@ -14,27 +14,27 @@ urlpatterns = [
     # Control definition related endpoints
     path(
         "schema/entity/control_definition_w_controls/",
-        control_views.get_control_definition_w_controls_schema,
+        views.get_control_definition_w_controls_schema,
         name="control_definition_schema",
     ),
     path(
         "data/entity/control_definition_w_controls/",
-        control_views.get_control_definition_w_controls_data,
+        views.get_control_definition_w_controls_data,
         name="control_definition_data",
     ),
     path(
         "data/record/control_definition_w_controls/<str:pretty_id>/",
-        control_views.get_control_definition_record_detail,
+        views.get_control_definition_record_detail,
         name="control_definition_data",
     ),
     path(
         "data/related/control_definition_w_controls/<str:pretty_id>/",
-        control_views.get_control_definition_related_records,
+        views.get_control_definition_related_records,
         name="control_definition_related",
     ),
     path(
         "form/options/control_definition_w_controls/<str:field_name>/",
-        control_views.get_control_definition_form_options,
+        views.get_control_definition_form_options,
         name="control_definition_form_options",
     ),
     # Schema endpoints
