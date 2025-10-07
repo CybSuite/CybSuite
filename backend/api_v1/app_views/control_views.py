@@ -4,18 +4,20 @@ import random
 from functools import reduce
 from typing import Dict
 
+from api_v1 import example_categories, example_tags
+from cybsuite.cyberdb import CyberDB, cyberdb_schema
 from django.db.models import Count, Prefetch, Q
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from .pretty_id_utils import (
+from ..pretty_id_utils import (
     get_entity_pretty_id_config,
     parse_pretty_id_with_relations,
     url_decode_pretty_id,
 )
-from .serializers import serialize_model
-from .utils import (
+from ..serializers import serialize_model
+from ..utils import (
     CONFIDENCE_RANKS,
     SEVERITY_RANKS,
     annotate_with_severity_confidence_labels,
@@ -28,7 +30,6 @@ from .utils import (
     get_flattened_columns_from_sample_data,
     get_max_severity_and_confidence,
 )
-from .views import CyberDB, cyberdb_schema, example_categories, example_tags
 
 
 @api_view(["GET"])

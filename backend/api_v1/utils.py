@@ -2,8 +2,12 @@ import json
 import logging
 import operator
 import os
+import shutil
+import tarfile
+import tempfile
 import threading
 import time
+import zipfile
 from datetime import datetime
 from functools import reduce
 from typing import Dict
@@ -2211,3 +2215,72 @@ def run_multiple_ingests_async(
     thread = threading.Thread(target=multiple_ingests)
     thread.daemon = True
     thread.start()
+
+
+def decompress_file(compressed_file_path: str, original_filename: str) -> str:
+    """
+    Decompress a compressed file to a temporary directory.
+
+    Args:
+        compressed_file_path: Path to the compressed file
+        original_filename: Original filename to determine compression type
+
+    Returns:
+        Path to the temporary directory containing decompressed files
+
+    Raises:
+        Exception: If decompression fails or format is unsupported
+    """
+    # Create a temporary directory for decompression
+    temp_dir = tempfile.mkdtemp(prefix="cybsuite_decompressed_")
+
+    try:
+        filename_lower = original_filename.lower()
+
+        if filename_lower.endswith(".zip"):
+            with zipfile.ZipFile(compressed_file_path, "r") as zip_ref:
+                zip_ref.extractall(temp_dir)
+        elif filename_lower.endswith((".tar", ".tar.gz", ".tgz")):
+            with tarfile.open(compressed_file_path, "r:*") as tar_ref:
+                tar_ref.extractall(temp_dir)
+        elif filename_lower.endswith(".gz") and not filename_lower.endswith(".tar.gz"):
+            import gzip
+
+            # For single .gz files, decompress to a single file
+            with gzip.open(compressed_file_path, "rb") as gz_file:
+                # Remove .gz extension for output filename
+                output_filename = (
+                    original_filename[:-3]
+                    if original_filename.endswith(".gz")
+                    else "decompressed_file"
+                )
+                output_path = os.path.join(temp_dir, output_filename)
+                with open(output_path, "wb") as output_file:
+                    shutil.copyfileobj(gz_file, output_file)
+        elif filename_lower.endswith(".bz2"):
+            import bz2
+
+            # For single .bz2 files, decompress to a single file
+            with bz2.open(compressed_file_path, "rb") as bz2_file:
+                # Remove .bz2 extension for output filename
+                output_filename = (
+                    original_filename[:-4]
+                    if original_filename.endswith(".bz2")
+                    else "decompressed_file"
+                )
+                output_path = os.path.join(temp_dir, output_filename)
+                with open(output_path, "wb") as output_file:
+                    shutil.copyfileobj(bz2_file, output_file)
+        else:
+            # For unsupported formats like .rar, .7z - we can't handle these with standard library
+            raise Exception(
+                f"Unsupported compression format: {original_filename}. Only .zip, .tar, .tar.gz, .gz, and .bz2 are supported."
+            )
+
+        return temp_dir
+
+    except Exception as e:
+        # Clean up temp directory if decompression failed
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        raise Exception(f"Decompression failed: {str(e)}")
