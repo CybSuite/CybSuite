@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<?xml-stylesheet href="file:///usr/bin/../share/nmap/nmap.xsl" type="text/xsl"?>
+<!-- Nmap 7.93 scan initiated Tue Oct  7 17:41:46 2025 as: nmap -&#45;min-rate=500 -iL scope.txt -&#45;excludefile exclude_scope.txt -v -n -sn -oA scans/nmap/ping_sweep -&#45;reason -->
+<nmaprun scanner="nmap" args="nmap -&#45;min-rate=500 -iL scope.txt -&#45;excludefile exclude_scope.txt -v -n -sn -oA scans/nmap/ping_sweep -&#45;reason" start="1759851706" startstr="Tue Oct  7 17:41:46 2025" version="7.93" xmloutputversion="1.05">
+<verbose level="1"/>
+<debugging level="0"/>
+<taskbegin task="ARP Ping Scan" time="1759851706"/>
+<taskend task="ARP Ping Scan" time="1759851707" extrainfo="255 total hosts"/>
+<host><status state="down" reason="no-response" reason_ttl="0"/>
+<address addr="10.10.10.10" addrtype="ipv4"/>
+</host>
+<host><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="10.10.10.11" addrtype="ipv4"/>
+<address addr="AA:BB:CC:DD:EE:FF" addrtype="mac"/>
+<hostnames>
+</hostnames>
+</host>
+<host><status state="down" reason="no-response" reason_ttl="0"/>
+<address addr="10.10.10.12" addrtype="ipv4"/>
+</host>
+<host><status state="down" reason="no-response" reason_ttl="0"/>
+<address addr="10.10.10.13" addrtype="ipv4"/>
+</host>
+<host><status state="up" reason="localhost-response" reason_ttl="0"/>
+<address addr="10.10.10.14" addrtype="ipv4"/>
+<hostnames>
+</hostnames>
+</host>
+<runstats><finished time="1759851750" timestr="Tue Oct  7 17:42:30 2025" summary="Nmap done at Tue Oct  7 17:42:30 2025; 5 IP addresses (2 hosts up) scanned in 43.32 seconds" elapsed="43.32" exit="success"/><hosts up="2" down="3" total="5"/>
+</runstats>
+</nmaprun>

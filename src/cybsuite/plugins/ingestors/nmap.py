@@ -114,6 +114,11 @@ class NmapIngestor(BaseIngestor):
 
         # Parse each host separately
         for host_xml in root.iter("host"):
+            # Skip hosts that are down
+            host_status = host_xml.find("status").attrib["state"]
+            if host_status == "down":
+                continue
+
             # parse_host call parse_port which call parse_script
             parsed_result = {
                 "hosts": [],

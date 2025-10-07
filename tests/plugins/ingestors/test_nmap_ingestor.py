@@ -282,3 +282,22 @@ def test_nmap_script_banner(
     assert service.version is None
     # TODO: we should know it's SSH since we have the banner!
     # assert "ssl" not in service.tags  # Don't add SSL when method is table!
+
+
+def test_nmap_ping_sweep_scan(new_cyberdb: CyberDB):
+    path = get_data_path("nmap/ping_sweep.xml")
+    new_cyberdb.ingest("nmap", path)
+
+    assert new_cyberdb.count("host") == 2  # Only up hosts are stored
+    assert new_cyberdb.count("service") == 0
+    assert new_cyberdb.count("dns") == 0
+
+    hosts = list(new_cyberdb.request("host"))
+    host_ips = [host.ip for host in hosts]
+
+    # Check that we have the 2 up hosts
+    assert "10.10.10.11" in host_ips
+    assert "10.10.10.14" in host_ips
+
+    # TODO: Verify MAC address handling for hosts with MAC addresses
+    # TODO: Check that hosts have ping information
