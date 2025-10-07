@@ -585,6 +585,7 @@ nav_app_pentest_internal.add(
         NavMenuDropListItem("Hosts", view="data:list/host"),
         NavMenuDropListItem("Services", view="data:list/service"),
         NavMenuDropListItem("DNS", view="data:list/dns"),
+        NavMenuDropListItem("Networks", view="data:list/network"),
         NavMenuDropListItem("Passwords", view="data:list/password"),
         NavMenuDropListItem("Hash", view="data:list/hash"),
     ],

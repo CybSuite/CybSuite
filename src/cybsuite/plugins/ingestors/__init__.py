@@ -8,4 +8,5 @@ from . import (  # noqa: F401
     masscan,
     netexec,
     nmap,
+    xlsx,
 )

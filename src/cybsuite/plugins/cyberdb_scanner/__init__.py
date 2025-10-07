@@ -1,1 +1,9 @@
-from . import auth, clean_ports, default, services, smb, weakpassword  # noqa: F401
+from . import (  # noqa: F401
+    auth,
+    clean_ports,
+    default,
+    services,
+    smb,
+    update_relations,
+    weakpassword,
+)
