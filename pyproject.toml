@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "cybsuite"
 # Update version also in consts.py
-version = "0.1.2"
+version = "0.1.3"
 description = "CybSuite"
 authors = ["Nazime LAKEHAL <nazime.lkh@gmail.com>"]
 license = "Apache-2.0"

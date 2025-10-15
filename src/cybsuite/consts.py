@@ -3,7 +3,7 @@ import tempfile
 from pathlib import Path
 
 # Update it also in pyproject.toml
-VERSION = "0.1.2"
+VERSION = "0.1.3"
 LOGGER_NAME = "cybsuite"
 
 
