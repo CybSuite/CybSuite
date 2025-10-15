@@ -4,6 +4,7 @@ from koalak.subcommand_parser import SubcommandParser
 from .runner import run_files_review
 
 
+# TODO/ remove this file? probably not used? (to check with ExtensionSystem)
 def feed_cli(main_cli: SubcommandParser):
     review_types = ["windows"]  # TODO: make it dynamic
     for type_name in review_types:

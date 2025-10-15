@@ -25,6 +25,12 @@ class RegistriesReviewer(WindowsReviewer):
             justification="Checked registry for cached logons count.",
         )
 
+        # NLA
+        rek_key = self.get_windows_registry(
+            r"HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp"
+        )["UserAuthentication"]
+        # debug(reg["UserAuthentication"])
+
 
 # TODO fix JucyRegistryReviewer later
 class JucyRegistryReviewer:

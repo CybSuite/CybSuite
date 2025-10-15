@@ -16,8 +16,9 @@ from cybsuite.core.logger import get_logger
 from cybsuite.cyberdb import CyberDB, CyberDBScanManager, pm_reporters
 from cybsuite.workspace.workspaces import get_current_workspace_path
 
-from .base_reviewer import ReviewContext, pm_reviewers, pm_type_reviewers
+from .base_reviewer import pm_reviewers, pm_type_reviewers
 from .extractions import ExtractionManager
+from .review_context import ReviewContext
 
 
 class ReviewManager:
@@ -60,6 +61,18 @@ class ReviewManager:
         self.reports_path = (
             get_current_workspace_path() / FOLDER_NAME_REVIEW / FOLDER_NAME_REPORTS
         )
+
+        # TODO: clean the output paths to create in a more appropriate way. This was done in a rush.
+        self.global_output_path = (
+            get_current_workspace_path() / FOLDER_NAME_REVIEW / "output"
+        )
+        self.global_output_path.mkdir(parents=True, exist_ok=True)
+
+        self.host_output_path = (
+            get_current_workspace_path() / FOLDER_NAME_REVIEW / "hosts_output"
+        )
+        self.host_output_path.mkdir(parents=True, exist_ok=True)
+
         self.extraction_manager = ExtractionManager()
         self.run_object = None
 
@@ -158,10 +171,15 @@ class ReviewManager:
             host_info = json.load(f)
 
         hostname = host_info["name"]
+        self.cyberdb.feed("hostname", name=hostname, type=host_info["type"])
+        output_host_path = self.host_output_path / hostname
+        output_host_path.mkdir(parents=True, exist_ok=True)
         context = ReviewContext(
             hostname=hostname,
-            datetime=dateutil.parser.parse(host_info["datetime"]),
+            extract_datetime=dateutil.parser.parse(host_info["datetime"]),
             host_extracts_path=host_path,
+            global_output_path=self.global_output_path,
+            host_output_path=output_host_path,
         )
 
         plugin.context = context
@@ -170,7 +188,7 @@ class ReviewManager:
 
         files = {}
         for key, value in plugin.files.items():
-            files[key] = os.path.join(host_path, value)
+            files[key] = Path(os.path.join(host_path, value))
 
         with self.scan_manager:
             plugin.run(files)

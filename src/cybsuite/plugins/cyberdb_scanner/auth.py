@@ -37,9 +37,12 @@ class ServicesVersionScanner(BaseCyberDBScanner):
         # Checks done
         # - LM hash not used (for AD and Windows users)
         # - Password reuse (for AD users)
+        # - Password reuse duplicate (for Windows users)
         # - Hash reuse for NTLM and LM (for AD users)
+        # - Cross-domain credential reuse (for AD users)
+        # - Cross-host credential reuse (for Windows users)
 
-        self.set_progress_total_portions(6)
+        self.set_progress_total_portions(7)
 
         self.set_progress_current_portion_label("Checking for LM hash usage")
         self._scan_lm_hash_used()
@@ -76,6 +79,12 @@ class ServicesVersionScanner(BaseCyberDBScanner):
                 },
             )
             self.next_progress_step()
+        self.next_progress_portion()
+
+        self.set_progress_current_portion_label(
+            "Checking for Windows user password reuse"
+        )
+        self._scan_windows_password_reuse()
         self.next_progress_portion()
 
         self.set_progress_current_portion_label("Checking for NTLM hash reuse")
@@ -144,7 +153,7 @@ class ServicesVersionScanner(BaseCyberDBScanner):
                     details["username"] = user.name
                 else:
                     details["host"] = str(user.host)
-                    details["username"] = user.user
+                    details["username"] = user.name
 
                 self.alert(
                     f"windows.lm_hash_used.{user_type}",
@@ -204,7 +213,7 @@ class ServicesVersionScanner(BaseCyberDBScanner):
             # Step 1: get reused credentials
             reused_creds = (
                 self.cyberdb.request("windows_user")
-                .values("user", cred_type)
+                .values("name", cred_type)
                 .filter(**{f"{cred_type}__isnull": False})
                 .exclude(**{cred_type: ""})
                 .annotate(host_count=Count("host", distinct=True))
@@ -224,19 +233,64 @@ class ServicesVersionScanner(BaseCyberDBScanner):
                         continue
 
                 users = self.cyberdb.request("windows_user").filter(
-                    user=entry["user"], **{cred_type: entry[cred_type]}
+                    name=entry["name"], **{cred_type: entry[cred_type]}
                 )
 
                 self.alert(
                     "auth.reuse.cross.windows",
                     confidence="certain",
                     details={
-                        "username": entry["user"],
+                        "username": entry["name"],
                         "credential_type": cred_type,
                         "credential_value": entry[cred_type],
                         "hosts": sorted([user.host.ip for user in users]),
                     },
                 )
+
+    def _scan_windows_password_reuse(self):
+        if not self.are_controls_enabled("auth.reuse.duplicate"):
+            return
+
+        # Check for password reuse in Windows users
+        passwords = self._check_reuse(
+            self.cyberdb.request("windows_user", password__isnull=False).exclude(
+                password=""
+            ),
+            key="password",
+        )
+        self.set_progress_total_steps(len(passwords))
+        for password, users in passwords.items():
+            self.alert(
+                "auth.reuse.duplicate",
+                confidence="certain",
+                details={
+                    "password": password,
+                    "users": [f"{user.host.ip}\\{user.name}" for user in users],
+                    "count": len(users),
+                },
+            )
+            self.next_progress_step()
+
+        # Check for NTLM hash reuse in Windows users
+        ntlm_hashes = self._check_reuse(
+            self.cyberdb.request("windows_user", ntlm__isnull=False).exclude(
+                ntlm__in=[self.NTLM_BLANK_HASH, ""]
+            ),
+            key="ntlm",
+        )
+        self.set_progress_total_steps(len(ntlm_hashes))
+        for ntlm_hash, users in ntlm_hashes.items():
+            self.alert(
+                "auth.reuse.duplicate",
+                confidence="certain",
+                details={
+                    "hash_type": "ntlm",
+                    "hash": ntlm_hash,
+                    "users": [f"{user.host.ip}\\{user.name}" for user in users],
+                    "count": len(users),
+                },
+            )
+            self.next_progress_step()
 
     @staticmethod
     def _check_reuse(iterable, key, blank_values=None):

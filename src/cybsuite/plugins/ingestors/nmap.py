@@ -105,6 +105,9 @@ class NmapIngestor(BaseIngestor):
 
     def do_run(self, filepath):
         # Parsing the xml file
+        kwargs = {}
+        if self.network:
+            kwargs["visible_from"] = [self.network]
         try:
             tree = ET.parse(filepath)
         except ET.ParseError:
@@ -160,7 +163,7 @@ class NmapIngestor(BaseIngestor):
                 ]
 
             for service_dict in parsed_services:
-                self.feed("service", **service_dict)
+                self.feed("service", **service_dict, **kwargs)
 
             # Check false positive for hosts #
             # ============================== #

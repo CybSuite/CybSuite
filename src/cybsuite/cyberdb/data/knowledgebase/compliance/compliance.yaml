@@ -14,3 +14,7 @@
     provider: cybsuite
     title: CybSuite DNS configuration review Workprogram
     version: 0.0.1
+-   name: cybsuite.conf.os
+    provider: cybsuite
+    title: CybSuite OS configuration review Workprogram
+    version: 0.0.1

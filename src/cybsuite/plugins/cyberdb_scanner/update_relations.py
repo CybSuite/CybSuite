@@ -12,6 +12,7 @@ class UpdateRelationsScanner(BaseCyberDBScanner):
 
     def do_run(self):
         self._update_hosts_networks()
+        self._update_networks_visible_from_service_to_hosts()
 
     def _update_hosts_networks(self):
         for network in self.cyberdb.request("network"):
@@ -51,3 +52,10 @@ class UpdateRelationsScanner(BaseCyberDBScanner):
                     self.logger.error(f"Invalid host IP: {host.ip}")
                     continue
             self.logger.info(f"Updating hosts for network {network}")
+
+    def _update_networks_visible_from_service_to_hosts(self):
+        for host in self.cyberdb.request("host"):
+            all_visible_from_networks = set()
+            for service in host.services.all():
+                all_visible_from_networks.update(service.visible_from.all())
+            host.visible_from.set(all_visible_from_networks)

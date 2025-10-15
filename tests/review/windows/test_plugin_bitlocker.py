@@ -4,7 +4,7 @@ from .utils import get_data_path
 
 
 def test_plugin_bitlocker(new_cyberdb):
-    plugin_name = "bitlocker_encryption"
+    plugin_name = "bitlocker"
 
     review_manager = ReviewManager(
         cyberdb=new_cyberdb,
@@ -12,7 +12,7 @@ def test_plugin_bitlocker(new_cyberdb):
     )
 
     review_manager.review_files(
-        {"bitlocker_volumes": get_data_path("bitlocker_volumes.json")}
+        {"get-bitlockervolume.json": get_data_path("bitlocker_volumes.json")}
     )
 
     controls = new_cyberdb.get_controls("windows.bitlocker")

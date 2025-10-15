@@ -12,6 +12,7 @@ allowed_tags = [
     "ms_cloud",
     "web",
     "firewall",
+    "os_review",
 ]
 
 # cyberdb_schema is the schema of CyberDB from all 3rd party extensions also

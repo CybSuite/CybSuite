@@ -40,19 +40,19 @@ def test_control_lm_hash_used_ad_user(new_cyberdb):
 def test_control_lm_hash_windows_user(new_cyberdb):
     new_cyberdb.feed(
         "windows_user",
-        user="john",
+        name="john",
         host="192.168.1.10",
         lm="aad3b435b51404eeaad3b435b51404ee",
     )  # this one should be ignored since it's the blank LM hash
     new_cyberdb.feed(
         "windows_user",
-        user="smith",
+        name="smith",
         host="192.168.1.10",
         lm="54b53da435e9ebccaad3b435b51404ee",
     )
     new_cyberdb.feed(
         "windows_user",
-        user="donald",
+        name="donald",
         host="192.168.1.10",
         lm="598ddce2660d3193aad3b435b51404ee",
     )
@@ -126,32 +126,32 @@ def test_control_auth_reuse_cross_windows_hosts(new_cyberdb):
     # John have same password in two different hosts
     new_cyberdb.feed(
         "windows_user",
-        user="john",
+        name="john",
         host="10.0.0.1",
         password="azerty",
     )
     new_cyberdb.feed(
         "windows_user",
-        user="john",
+        name="john",
         host="10.0.0.2",
         password="azerty",
     )
     # create other user with same password, that should not be alerted
     new_cyberdb.feed(
         "windows_user",
-        user="smith",
+        name="smith",
         host="10.0.0.1",
         password="azerty",
     )
     # Create 2 users with empty password to not be alerted
     new_cyberdb.feed(
         "windows_user",
-        user="user2",
+        name="user2",
         host="10.0.0.3",
     )
     new_cyberdb.feed(
         "windows_user",
-        user="user2",
+        name="user2",
         host="10.0.0.4",
     )
 

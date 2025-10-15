@@ -1,3 +1,4 @@
+from functools import cache
 from typing import TYPE_CHECKING
 
 from cybsuite.core.logger import get_logger
@@ -24,6 +25,8 @@ class Control:
         details=None,
         _as_control: bool = True,
     ):
+        if details is None:
+            details = {}
         self.name = name
         self.details = details
 
@@ -79,6 +82,19 @@ class Control:
         # TODO: normally once we call not_applicable (and so on) we can not call other methods like ko
         self._alert(
             status="not_applicable",
+            confidence=confidence,
+            severity=severity,
+            justification=justification,
+        )
+
+    def unknown(
+        self,
+        confidence: str = None,
+        severity: str = None,
+        justification: str = None,
+    ):
+        self._alert(
+            status="unknown",
             confidence=confidence,
             severity=severity,
             justification=justification,
@@ -171,6 +187,17 @@ class CyberDBPluginBaseMixin(CyberDBProgressMixin):
             )
         else:
             obs_name = self.fetched_controls[obs_name]
+
+        # Set default severity if not provided
+        severity = kwargs.pop("severity", None)
+        if severity is None:
+            try:
+                control_obj = self._get_control_from_name(obs_name)
+                severity = control_obj.severity
+            except Exception as e:
+                pass
+
+        kwargs["severity"] = severity
 
         if self.enforce_controls:
             if "confidence" not in kwargs:
@@ -413,3 +440,7 @@ class CyberDBPluginBaseMixin(CyberDBProgressMixin):
         }
         other_kwargs = {k: v for k, v in new_entry.items() if k not in updated_kwargs}
         return other_kwargs, unpresent_kwargs, updated_kwargs
+
+    @cache
+    def _get_control_from_name(self, name: str):
+        return self.cyberdb.first("control_definition", name=name)

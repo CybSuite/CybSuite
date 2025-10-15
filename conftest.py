@@ -37,6 +37,7 @@ def pytest_sessionfinish(session, exitstatus):
     """Remove the PostgreSQL database after all tests have been run."""
     try:
         # Connect to the PostgreSQL server
+        temp_db_name, user, password, host, port = get_db_config()
         conn = psycopg2.connect(
             dbname="postgres", user=user, password=password, host=host
         )

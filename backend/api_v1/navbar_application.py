@@ -516,6 +516,17 @@ def build_menu_missions():
     )
 
 
+def build_menu_os_review():
+    items = []
+    for entity in cyberdb_schema.filter(tags="os_review"):
+        items.append(
+            NavMenuDropListItem(
+                entity.pretty_name.title(), view=f"data:list/{entity.name}"
+            )
+        )
+    return NavMenuItem("OS", droplist_items=items)
+
+
 def build_menu_linux_review():
     items = []
     for entity in cyberdb_schema.filter(tags="linux_review"):
@@ -527,6 +538,21 @@ def build_menu_linux_review():
 
     return NavMenuItem(
         "Linux Review",
+        droplist_items=items,
+    )
+
+
+def build_menu_windows_review():
+    items = []
+    for entity in cyberdb_schema.filter(tags="windows_review"):
+        items.append(
+            NavMenuDropListItem(
+                entity.pretty_name.title(), view=f"data:list/{entity.name}"
+            )
+        )
+
+    return NavMenuItem(
+        "Windows",
         droplist_items=items,
     )
 
@@ -614,7 +640,9 @@ nav_app_pentest_internal.add(
 nav_app_pentest_web.add(build_menu_pentest_web())
 
 # Configuration review app
+nav_app_configuration_review.add(build_menu_os_review())
 nav_app_configuration_review.add(build_menu_linux_review())
+nav_app_configuration_review.add(build_menu_windows_review())
 
 for nav_app in all_applications:
     # nav_app.add(build_menu_missions())

@@ -1,10 +1,30 @@
 - atomic: true
   compliances:
   - cybsuite.conf.windows
+  - cybsuite.conf.os
   name: os.not_updated
-  severity: major
+  severity: high
 - atomic: true
   compliances:
   - cybsuite.conf.windows
+  - cybsuite.conf.os
   name: os.updates_are_not_regular
   severity: medium
+- atomic: true
+  compliances:
+  - cybsuite.conf.windows
+  - cybsuite.conf.os
+  name: os.installed_by
+  severity: low
+- atomic: true
+  compliances:
+  - cybsuite.conf.windows
+  - cybsuite.conf.os
+  name: applications.useless
+  severity: low
+- atomic: true
+  compliances:
+  - cybsuite.conf.windows
+  - cybsuite.conf.os
+  name: applications.vuln
+  severity: high

@@ -1,5 +1,7 @@
 import json
 import os
+import re
+from datetime import datetime, timezone
 from typing import Any, Iterable
 
 from cybsuite.review.files_reviewers import BaseReviewer, BaseTypeReviewer
@@ -91,6 +93,35 @@ class WindowsReviewer(BaseReviewer):
     abstract = True
     metadata = Metadata(category="windows")
     type_reviewer: WindowsTypeReviewer
+
+    # Private regex pattern for the date format \/Date(1234567890)\/
+    _DATE_PATTERN = re.compile(r"\/Date\((\d+)\)\/")
+
+    @classmethod
+    def parse_date_value(cls, date_value: str) -> datetime:
+        r"""
+        Parse a date value string in the format \/Date(1234567890)\/ into a UTC datetime object.
+
+        Args:
+            date_value: String in the format \/Date(1234567890)\/
+
+        Returns:
+            datetime object with UTC timezone
+
+        Raises:
+            ValueError: If the date_value doesn't match the expected format
+        """
+        match = cls._DATE_PATTERN.match(date_value)
+        if not match:
+            raise ValueError(
+                f"Invalid date format: {date_value}. Expected format: \\/Date(1234567890)\\/"
+            )
+
+        timestamp_ms = int(match.group(1))
+        # Convert to UTC datetime
+        return datetime.fromtimestamp(
+            timestamp_ms / 1000, tz=timezone.utc
+        )  # Convert milliseconds to seconds
 
     # WINDOWS REGISTRY API #
     # -------------------- #

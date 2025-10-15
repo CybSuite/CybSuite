@@ -1,0 +1,22 @@
+description: "Represent a host but primary key is hostname instead of IP address. It should be changed in future versions"
+tags: os_review
+fields:
+  name:
+    type: str
+    in_filter_query: true
+    indexed: true
+    description: "Host name"
+    repr: true
+  type:
+    type: str
+    description: "Type of host"
+    choices:
+      - windows
+      - linux
+      - mac
+      - other
+    default: null
+  install_date:
+    type: datetime
+    default: null
+    description: "Installation date of the host"

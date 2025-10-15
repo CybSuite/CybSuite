@@ -2,7 +2,7 @@
   compliances:
   - cybsuite.conf.windows
   name: windows.bitlocker
-  severity: major
+  severity: high
 - atomic: true
   compliances:
   - cybsuite.conf.windows
@@ -17,4 +17,19 @@
   compliances:
   - cybsuite.conf.windows
   name: windows.users.built_in_admin_not_renamed
+  severity: low
+- atomic: true
+  compliances:
+  - cybsuite.conf.windows
+  name: windows.laps
+  severity: high
+- atomic: true
+  compliances:
+  - cybsuite.conf.windows
+  name: windows.users.password_required
+  severity: medium
+- atomic: true
+  compliances:
+  - cybsuite.conf.windows
+  name: windows.users.password_last_set
   severity: medium
