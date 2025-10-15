@@ -15,9 +15,13 @@ pm_home_path = PATH_CYBSUITE / "reviewers"
 class ReviewContext:
     """Context data that changes between hosts and plugins. Each plugin have access to it and context can be changed between each run and moment of the review flow."""
 
+    # Hostname of current host being reviewed
     hostname: str
+
     datetime: datetime
     host_extracts_path: Path
+    global_output_path: Path
+    host_output_path: Path
     # Global data is shared between all plugins of same type (ex: all windows reviewers)
     #  It is reset between evey type
     global_data: dict[str, Any] = field(default_factory=dict)

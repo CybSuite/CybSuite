@@ -27,7 +27,9 @@ pm_reporters.init()
 pm_ingestors.init()
 pm_cyberdb_scanner.init()
 pm_formatters.init()
-CybSuiteExtension.load_plugins()
+CybSuiteExtension.load_plugins(
+    ["ingestors", "cyberdb_scanners", "reporters", "formaters"]
+)
 
 __all__ = [
     "BaseIngestor",

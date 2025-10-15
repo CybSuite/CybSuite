@@ -97,7 +97,7 @@ class WeakPasswordScanner(BaseCyberDBScanner):
             (
                 "windows_user",
                 [
-                    "user",
+                    "name",
                 ],
             ),
             ("password", []),

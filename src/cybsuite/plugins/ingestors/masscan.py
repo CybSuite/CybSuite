@@ -22,6 +22,10 @@ class MasscanIngestor(BaseIngestor):
         return False
 
     def do_run(self, filepath):
+        kwargs = {}
+        if self.network:
+            kwargs["visible_from"] = [self.network]
+
         for line in self.iter_lines_from_filepath(filepath):
             _, _, _, port_service, _, ip = line.split()
             port, protocol = port_service.split("/")
@@ -31,4 +35,6 @@ class MasscanIngestor(BaseIngestor):
                 # TODO: unitest ICMP
                 self.cyberdb.feed("host", ip=ip)
             else:
-                self.cyberdb.feed("service", host=ip, port=port, protocol=protocol)
+                self.cyberdb.feed(
+                    "service", host=ip, port=port, protocol=protocol, **kwargs
+                )

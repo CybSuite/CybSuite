@@ -1,7 +1,7 @@
 description: "Windows user account information"
 tags: windows_review
 fields:
-  user:
+  name:
     type: str
     in_filter_query: true
     indexed: true
@@ -11,9 +11,12 @@ fields:
     type: host
     in_filter_query: true
     indexed: true
-    default: null
     description: "Target Windows system"
     repr: true
+  enabled:
+    type: bool
+    default: null
+    description: "Account enabled status"
   rid:
     type: str
     default: null
@@ -22,30 +25,44 @@ fields:
     type: str
     default: null
     description: "Security identifier"
-  AcctDisabled:
-    type: bool
-    default: null
-    description: "Account disabled status"
-  PswdCanBeChanged:
-    type: bool
-    default: null
-    description: "Password change permission"
-  PswdLastSetTime:
+    hidden_in_list: true
+  account_expires:
     type: str
     default: null
-    description: "Last password change time"
-  PswdRequired:
+    description: "Account expiration date"
+  description:
+    type: str
+    default: null
+    description: "Account description"
+
+  full_name:
+    type: str
+    default: null
+    description: "Full name of the user"
+  password_changeable_date:
+    type: datetime
+    default: null
+    description: "Date when password can be changed"
+  password_expires:
+    type: str
+    default: null
+    description: "Password expiration date"
+  user_may_change_password:
+    type: bool
+    default: null
+    description: "User can change password permission"
+  password_required:
     type: bool
     default: null
     description: "Password requirement status"
-  PswdExpires:
-    type: bool
+  password_last_set:
+    type: datetime
     default: null
-    description: "Password expiration status"
-  PswdExpiresTime:
-    type: str
-    default: str
-    description: "Password expiration time"
+    description: "Last password change time"
+  last_logon:
+    type: datetime
+    default: null
+    description: "Last logon time"
   password:
     type: str
     default: null

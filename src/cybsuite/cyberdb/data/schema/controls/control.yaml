@@ -11,7 +11,7 @@ fields:
     type: str
     indexed: true
     default: not_started
-    description: "Current control validation state"
+    description: "Current control validation state. unknown when we can't determine the status."
     choices:
       - ok
       - ko
@@ -19,6 +19,7 @@ fields:
       - not_started
       - in_progress
       - manual
+      - unknown
   details:
     type: dict
     repr: true

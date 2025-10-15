@@ -6,7 +6,7 @@ from cybsuite.cyberdb import CyberDB
     "table,feed_args,expected_location",
     [
         ("ad_user", {"name": "bob", "domain": "corp.local"}, "bob - corp.local"),
-        ("windows_user", {"user": "bob", "host": "192.168.1.1"}, "bob - 192.168.1.1"),
+        ("windows_user", {"name": "bob", "host": "192.168.1.1"}, "bob - 192.168.1.1"),
         ("password", {}, None),
     ],
 )
@@ -37,7 +37,7 @@ def test_auth_weak_password_strong_one(
         ("ad_user", {"name": "alice", "domain": "corp.local"}, "alice - corp.local"),
         (
             "windows_user",
-            {"user": "alice", "host": "192.168.1.1"},
+            {"name": "alice", "host": "192.168.1.1"},
             "alice - 192.168.1.1",
         ),
         ("password", {}, None),

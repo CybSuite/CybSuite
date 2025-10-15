@@ -3,6 +3,7 @@ import inspect
 from functools import lru_cache
 from importlib import import_module
 from importlib.metadata import entry_points
+from typing import Union
 
 
 def load_from_string(path: str):
@@ -23,6 +24,14 @@ class CybSuiteExtension:
     Library declare"""
 
     ENTRY_POINT_GROUP_NAME = "cybsuite.extensions"
+    ALLOWED_PLUGIN_TYPES = {
+        "ingestors",
+        "cyberdb_scanners",
+        "formaters",
+        "reporters",
+        "reviewers",
+        "active_scanners",
+    }
 
     def __init__(
         self,
@@ -32,7 +41,7 @@ class CybSuiteExtension:
         cyberdb_knowledgebase: str = None,
         cyberdb_cli=None,
         extend_cli_review_function: str = None,
-        plugins_module: str = None,
+        plugins_module: dict[str, str] = None,
     ):
 
         self.name = name
@@ -41,6 +50,21 @@ class CybSuiteExtension:
         self.cyberdb_knowledgebase = cyberdb_knowledgebase
         self.extend_cli_review_function = extend_cli_review_function
         self.cyberdb_cli = cyberdb_cli
+
+        # Validate plugins_module if provided
+        if plugins_module is not None:
+            if not isinstance(plugins_module, dict):
+                raise TypeError(
+                    f"plugins_module must be a dict, got {type(plugins_module)}"
+                )
+
+            # Validate that all keys are in the allowed types
+            invalid_keys = set(plugins_module.keys()) - self.ALLOWED_PLUGIN_TYPES
+            if invalid_keys:
+                raise ValueError(
+                    f"Invalid plugin types in plugins_module: {invalid_keys}. Allowed types: {self.ALLOWED_PLUGIN_TYPES}"
+                )
+
         self.plugins_module = plugins_module
 
     @property
@@ -76,11 +100,36 @@ class CybSuiteExtension:
         return extensions
 
     @classmethod
-    def load_plugins(cls):
+    def load_plugins(cls, plugin_types: Union[str, list[str]]):
+        """Load plugins from extensions.
+
+        Args:
+            plugin_types: String or list of strings specifying which plugin types to load.
+                         Must be one of: 'reviewers', 'ingestors', 'cyberdb_scanner', 'reporters', 'formaters'
+        """
+        # Normalize plugin_types to a list
+        if isinstance(plugin_types, str):
+            plugin_types = [plugin_types]
+        elif isinstance(plugin_types, list):
+            pass
+        else:
+            raise TypeError("plugin_types must be a string or list of strings")
+
+        # Validate that all requested types are in the whitelist
+        invalid_types = set(plugin_types) - cls.ALLOWED_PLUGIN_TYPES
+        if invalid_types:
+            raise ValueError(
+                f"Invalid plugin types: {invalid_types}. Allowed types: {cls.ALLOWED_PLUGIN_TYPES}"
+            )
+
         for extension in cls.load_extensions():
             if extension.plugins_module is None:
                 continue
-            import_module(extension.plugins_module)
+
+            # Load only the requested plugin types
+            for plugin_type in plugin_types:
+                if plugin_type in extension.plugins_module:
+                    import_module(extension.plugins_module[plugin_type])
 
     @classmethod
     def _validate_cli_function(cls, func, name):

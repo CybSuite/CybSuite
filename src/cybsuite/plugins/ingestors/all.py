@@ -5,7 +5,7 @@ from pathlib import Path
 from cybsuite.cyberdb import BaseIngestor, Metadata, pm_ingestors
 
 
-class MasscanIngestor(BaseIngestor):
+class AllIngestor(BaseIngestor):
     name = "all"
     metadata = Metadata(description="Ingest all output file")
 
@@ -15,7 +15,9 @@ class MasscanIngestor(BaseIngestor):
     @cache
     def _get_plugin_instance(self, plugin_name: str):
         plugin_cls = pm_ingestors[plugin_name]
-        return plugin_cls(self.cyberdb)
+        plugin_instance = plugin_cls(self.cyberdb)
+        plugin_instance.network = self.network
+        return plugin_instance
 
     def do_run(self, filepath, allow_multiple_ingestion: bool = None):
         if allow_multiple_ingestion is None:

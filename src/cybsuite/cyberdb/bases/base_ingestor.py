@@ -26,6 +26,7 @@ class BaseIngestor(Plugin, CyberDBPluginBaseMixin):
             # TODO: double check if exceptions_path are working
             exceptions_path=pm_home_path / "exceptions" / f"{self.name}.exceptions.txt",
         )
+        self.network = None
 
     def run(self, *args, **kwargs):
         return self.do_run(*args, **kwargs)

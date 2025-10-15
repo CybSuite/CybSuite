@@ -216,13 +216,17 @@ class CyberDB(BaseCyberDB):
             scanner_instance.run()
 
     def ingest(
-        self, toolname: str, filepaths: Union[str, Path, List[Union[str, Path]]]
+        self,
+        toolname: str,
+        filepaths: Union[str, Path, List[Union[str, Path]]],
+        network=None,
     ):
         if isinstance(filepaths, (str, Path)):
             filepaths = [filepaths]
 
         ingestor_cls = pm_ingestors[toolname]
         ingestor_instance = ingestor_cls(self)
+        ingestor_instance.network = network
         for filepath in filepaths:
             logger.info(f"Ingesting {filepath}")
             try:

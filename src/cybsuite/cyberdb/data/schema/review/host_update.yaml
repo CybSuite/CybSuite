@@ -1,0 +1,37 @@
+description: "Represent a host update"
+tags: os_review
+fields:
+  host:
+    type: hostname
+    in_filter_query: true
+    indexed: true
+    description: "Host on which the update has been installed"
+    repr: true
+  update_id:
+    type: str
+    indexed: true
+    description: "ID of the update"
+    examples: ["KB123456", "KB123457"]
+    repr: true
+    default: null
+    in_filter_query: true
+  installed_on:
+    type: datetime
+    description: "Date and time when the update was installed"
+    default: null
+    in_filter_query: true
+    indexed: true
+  type:
+    type: str
+    description: "Type of update"
+    choices:
+      - security
+      - feature
+      - unkown
+    default: unknown
+    in_filter_query: true
+    indexed: true
+  installed_by:
+    type: str
+    description: "Who installed the update"
+    default: null
