@@ -219,14 +219,14 @@ class CyberDB(BaseCyberDB):
         self,
         toolname: str,
         filepaths: Union[str, Path, List[Union[str, Path]]],
-        network=None,
+        source_network=None,
     ):
         if isinstance(filepaths, (str, Path)):
             filepaths = [filepaths]
 
         ingestor_cls = pm_ingestors[toolname]
         ingestor_instance = ingestor_cls(self)
-        ingestor_instance.network = network
+        ingestor_instance.source_network = source_network
         for filepath in filepaths:
             logger.info(f"Ingesting {filepath}")
             try:

@@ -30,7 +30,7 @@ class AssetsVisibilityReporter(BaseReporter):
             for obj in self.cyberdb.request(obj_type):
                 row = {obj_type: str(obj)}
                 for network in networks:
-                    row[str(network)] = str(network in obj.visible_from.all())
+                    row[str(network)] = str(network in obj.visible_from_networks.all())
 
                 data.append(row)
             workbook = data_to_excel(data, sheet_name=obj_type, workbook=workbook)

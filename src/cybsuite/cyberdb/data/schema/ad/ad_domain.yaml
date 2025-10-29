@@ -10,6 +10,7 @@ fields:
     indexed: true
     repr: true
     examples: ['target.local']
+    converters: [strip_lower]
   sid:
     description: Domain Security Identifier
     type: str
@@ -19,3 +20,4 @@ fields:
     description: Description of the domain
     type: str
     default: null
+    max_length: 200

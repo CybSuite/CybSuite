@@ -57,5 +57,5 @@ class UpdateRelationsScanner(BaseCyberDBScanner):
         for host in self.cyberdb.request("host"):
             all_visible_from_networks = set()
             for service in host.services.all():
-                all_visible_from_networks.update(service.visible_from.all())
-            host.visible_from.set(all_visible_from_networks)
+                all_visible_from_networks.update(service.visible_from_networks.all())
+            host.visible_from_networks.set(all_visible_from_networks)

@@ -30,7 +30,7 @@ def add_cli_ingest(cli_main: SubcommandParser):
     )
 
     subcmd.add_argument(
-        "--network",
+        "--source-network",
         help="Mark services visible from that network",
     )
 
@@ -48,4 +48,4 @@ def _run(args):
     ingestor_name = args.ingestor_name
     filepaths = args.filepaths
     cyberdb = CyberDB.from_default_config()
-    cyberdb.ingest(ingestor_name, filepaths, network=args.network)
+    cyberdb.ingest(ingestor_name, filepaths, source_network=args.source_network)

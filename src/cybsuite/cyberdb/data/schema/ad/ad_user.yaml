@@ -7,6 +7,8 @@ fields:
     in_filter_query: true
     indexed: true
     repr: true
+    converters: [strip_lower]
+    max_length: 200
   domain:
     type: ad_domain
     in_filter_query: true
@@ -16,9 +18,11 @@ fields:
     type: str
     default: null
   lm:
+    converters: [strip_lower]
     type: str
     default: null
   ntlm:
+    converters: [strip_lower]
     type: str
     default: null
   rid:

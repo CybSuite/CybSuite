@@ -7,10 +7,11 @@ fields:
     unique: true
     indexed: true
     repr: true
-    max_length: 200
+    max_length: 50
     in_filter_query: true
     description: "Unique KB identifier"
   description:
     type: str
     description: "Category purpose and scope"
     default: null
+    max_length: 200

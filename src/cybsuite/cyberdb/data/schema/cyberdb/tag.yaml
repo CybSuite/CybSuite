@@ -8,9 +8,10 @@ fields:
     in_filter_query: true
     unique: true
     repr: true
-    max_length: 200
+    max_length: 50
     description: "Unique tag identifier"
   description:
     type: str
     description: "Tag purpose and usage"
     default: null
+    max_length: 200

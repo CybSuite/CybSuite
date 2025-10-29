@@ -23,10 +23,11 @@ class MasscanIngestor(BaseIngestor):
 
     def do_run(self, filepath):
         kwargs = {}
-        if self.network:
-            kwargs["visible_from"] = [self.network]
+        if self.source_network:
+            kwargs["visible_from_networks"] = [self.source_network]
 
         for line in self.iter_lines_from_filepath(filepath):
+            # TODO: assert "open" is in it
             _, _, _, port_service, _, ip = line.split()
             port, protocol = port_service.split("/")
             port = int(port)

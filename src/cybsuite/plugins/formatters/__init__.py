@@ -1,7 +1,8 @@
 from . import (  # noqa: F401
     csv,
     ip,
-    ipport,
+    ipport_tcp,
+    ipport_udp,
     ipports_tcp,
     ipports_udp,
     json,
