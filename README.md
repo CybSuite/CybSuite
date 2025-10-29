@@ -1,7 +1,7 @@
 # CybSuite
 
 > **Warning**
-> This project is currently in Alpha stage and under active development. While core functionality is implemented and tested, the API and features may change significantly between versions.
+> This project is currently in Alpha stage and under active development. While core functionality is implemented and tested, the API, DB Schema and features may change significantly between versions.
 
 Official documentation: https://cybsuite.github.io/CybSuite/
 

@@ -99,15 +99,19 @@ class NmapIngestor(BaseIngestor):
     def autodetect_from_path(cls, path: Path) -> bool:
         if path.name.endswith("nmap.xml"):
             return True
-        elif "<!DOCTYPE nmaprun>" in cls.autodetect_get_first_500_chars(path):
+        first_chars = cls.autodetect_get_first_500_chars(path)
+
+        if "<!DOCTYPE nmaprun>" in first_chars:
+            return True
+        elif "?><nmaprun args" in first_chars:
             return True
         return False
 
     def do_run(self, filepath):
         # Parsing the xml file
         kwargs = {}
-        if self.network:
-            kwargs["visible_from"] = [self.network]
+        if self.source_network:
+            kwargs["visible_from_networks"] = [self.source_network]
         try:
             tree = ET.parse(filepath)
         except ET.ParseError:
@@ -133,8 +137,8 @@ class NmapIngestor(BaseIngestor):
             host_dict = {}
             ip = host_xml.find("address").attrib["addr"]
             host_dict["ip"] = ip
-
-            if host_xml.find("status").attrib["reason"] == "user-set":
+            # TODO: add the test when .get('rreason') failed before
+            if host_xml.find("status").attrib.get("reason") == "user-set":
                 # if provided -Pn the host will always be up
                 host_is_up_due_to_pn_arg = True
             else:

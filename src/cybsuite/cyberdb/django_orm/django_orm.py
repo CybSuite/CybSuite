@@ -200,23 +200,16 @@ class DjangoORMDatabase(AbstractDatabase):
         filter_query = {}
         cleaned_attributes = {}
 
-        # Check all in_filter_query attributes are present
-        if not entity.in_filter_query_attributes:
-            raise ValueError(
-                f"Can not feed the entity {entity.name} because no attribute is in_filter_query"
-            )
+        attributes = self._validate_and_convert_attributes(attributes, entity=entity)
 
-        # Get primary attributes (in_filter_query)
         for primary_attribute in entity.in_filter_query_attributes:
-            if primary_attribute.name not in attributes:
-                raise ValueError(f"Required attribute '{primary_attribute.name}' ")
             filter_query[primary_attribute.name] = attributes[primary_attribute.name]
 
         # Geet other attributes
-        for attribute_name in attributes:
+        for attribute_name, attribute_value in attributes.items():
             # get non primary keys
             if attribute_name not in filter_query:
-                cleaned_attributes[attribute_name] = attributes[attribute_name]
+                cleaned_attributes[attribute_name] = attribute_value
 
         for one_to_many_field in entity.one_to_many_attributes:
             fk_name = one_to_many_field.name
@@ -568,6 +561,44 @@ class DjangoORMDatabase(AbstractDatabase):
             return "existing"
         else:
             return "updated"
+
+    def _validate_and_convert_attributes(
+        self, attributes, *, entity: EntityDescription
+    ):
+        # Check the entity is feedable
+        if not entity.in_filter_query_attributes:
+            raise ValueError(
+                f"Can not feed the entity {entity.name} because no attribute is in_filter_query"
+            )
+
+        # Check that all required attributes are present
+        # TODO: we should test required and not in_filter_query, we can have not required in_filter_query
+        for primary_attribute in entity.in_filter_query_attributes:
+            if primary_attribute.name not in attributes:
+                raise ValueError(f"Required attribute '{primary_attribute.name}' ")
+
+        cleaned_attributes = {}
+        # Check other attributes
+        for attribute_name, attribute_value in attributes.items():
+            # Check that the attribute name exists in the model
+            if attribute_name not in entity:
+                raise AttributeError(
+                    f"Attribute '{attribute_name}' not found in model {entity.name}"
+                )
+
+            field_description = entity[attribute_name]
+
+            # Ignore one to one and many to many fields
+            if not field_description.has_relationship():
+                # Do not validate type, since the DB already check it
+                cleaned_attributes[
+                    attribute_name
+                ] = field_description.convert_and_validate(
+                    attribute_value, validate_type=False
+                )
+            else:
+                cleaned_attributes[attribute_name] = attribute_value
+        return cleaned_attributes
 
     def _warm_schema(self):
         # TODO: warm schema should not be here but in koalak?

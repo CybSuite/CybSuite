@@ -241,6 +241,7 @@ class CyberDBPluginBaseMixin(CyberDBProgressMixin):
     def feed(self, model_name, **kwargs):
         """Feed method with exception handling"""
         try:
+            # TODO: already got problem here when I silenced the error
             return self._feed(model_name, **kwargs)
         except Exception as e:
             log_exception(e, self.exceptions_path)

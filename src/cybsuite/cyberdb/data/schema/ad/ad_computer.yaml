@@ -7,6 +7,7 @@ fields:
     in_filter_query: true
     indexed: true
     repr: true
+    converters: [strip_lower]
   domain:
     type: ad_domain
     in_filter_query: true

@@ -48,3 +48,13 @@ def test_masscan(new_cyberdb: CyberDB):
     assert service.port == 21
     assert service.protocol == "tcp"
     # assert "masscan" in service["source"]
+
+
+def test_masscan_with_source_network(new_cyberdb: CyberDB):
+    path = get_data_path("masscan.txt")
+    new_cyberdb.ingest("masscan", path, source_network="wifi_guest")
+
+    assert new_cyberdb.count("service") == 5
+
+    for service in new_cyberdb.request("service"):
+        assert service.visible_from_networks.first().name == "wifi_guest"

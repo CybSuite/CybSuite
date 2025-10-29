@@ -51,6 +51,35 @@ def test_nmap_simple_simple_service_scan(new_cyberdb: CyberDB):
     assert service.nmap_confidence == 10
 
 
+def test_nmap_with_source_network(new_cyberdb: CyberDB):
+    path = get_data_path("nmap/tcp_service_scan.nmap.xml")
+    new_cyberdb.ingest("nmap", path, source_network="wifi_guest")
+
+    assert new_cyberdb.count("host") == 1
+    assert new_cyberdb.count("service") == 1
+    assert new_cyberdb.count("dns") == 0
+
+    hosts = list(new_cyberdb.request("host"))
+    host = hosts[0]
+    assert host.ip == "10.10.10.10"
+    # assert "nmap" in host["source"]
+
+    service = new_cyberdb.first("service", port=5900)
+    assert service.host.ip == "10.10.10.10"
+    assert service.protocol == "tcp"
+    assert service.port == 5900
+    assert service.type == "vnc"
+    assert service.visible_from_networks.count() == 1
+    assert service.visible_from_networks.first().name == "wifi_guest"
+    # assert "nmap" in service["source"]
+
+    assert service.nmap_extrainfo == "protocol 3.8"
+    assert service.nmap_name == "vnc"
+    assert service.nmap_product == "VNC"
+    assert service.nmap_method == "probed"
+    assert service.nmap_confidence == 10
+
+
 def test_nmap_simple_simple_service_scan_ftp(new_cyberdb: CyberDB):
     path = get_data_path("nmap/nmap_service_scan_ftp.nmap.xml")
     new_cyberdb.ingest("nmap", path)
@@ -301,3 +330,17 @@ def test_nmap_ping_sweep_scan(new_cyberdb: CyberDB):
 
     # TODO: Verify MAC address handling for hosts with MAC addresses
     # TODO: Check that hosts have ping information
+
+
+def test_nmap_zenmap_fast_scan(new_cyberdb: CyberDB):
+    # Here we dont know why the host is up (no service, and no reason in the XML file)
+    path = get_data_path("nmap/zenmap_fast_scan.xml")
+    new_cyberdb.ingest("nmap", path)
+
+    assert new_cyberdb.count("host") == 1
+    assert new_cyberdb.count("service") == 0
+    assert new_cyberdb.count("dns") == 0
+
+    hosts = list(new_cyberdb.request("host"))
+    host = hosts[0]
+    assert host.ip == "10.10.10.10"

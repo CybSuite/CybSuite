@@ -1,4 +1,4 @@
-# CybSuite Frontend-Backend Connection
+# [WORK IN PROGRESS] CybSuite Frontend-Backend Connection
 
 This setup connects the Django backend with the Next.js frontend, allowing seamless API communication between the two.
 

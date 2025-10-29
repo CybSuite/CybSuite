@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet href="file:///C:/Program Files (x86)/Nmap/nmap.xsl" type="text/xsl"?><nmaprun args="nmap -T4 -F 10.10.10.0/24" profile_name="" scanner="nmap" start="1760521586" startstr="Wed Oct 15 11:46:26 2025" version="7.98" xmloutputversion="1.04"><scaninfo type="syn" protocol="tcp" numservices="100" services="7,9,13,21-23,25-26,37,53,79-81,88,106,110-111,113,119,135,139,143-144,179,199,389,427,443-445,465,513-515,543-544,548,554,587,631,646,873,990,993,995,1025-1029,1110,1433,1720,1723,1755,1900,2000-2001,2049,2121,2717,3000,3128,3306,3389,3986,4899,5000,5009,5051,5060,5101,5190,5357,5432,5631,5666,5800,5900,6000-6001,6646,7070,8000,8008-8009,8080-8081,8443,8888,9100,9999-10000,32768,49152-49157"></scaninfo><verbose level="0"></verbose><debugging level="0"></debugging><output type="interactive">Starting Nmap 7.98 ( https://nmap.org ) at 2025-10-15 11:46 +0200
+Nmap scan report for 10.10.10.10
+Host is up (0.029s latency).
+All 100 scanned ports on 10.10.10.10 are in ignored states.
+Not shown: 100 filtered tcp ports (no-response)
+
+Nmap done: 256 IP addresses (1 host up) scanned in 30.45 seconds
+</output><host comment=""><status state="up"></status><address addr="10.10.10.10" vendor="" addrtype="ipv4"></address><hostnames></hostnames><ports><extraports count="100" state="filtered"></extraports></ports><os></os><uptime seconds="" lastboot=""></uptime><tcpsequence index="" difficulty="" values=""></tcpsequence><ipidsequence class="" values=""></ipidsequence><tcptssequence class="" values=""></tcptssequence></host><runstats><finished time="1760521616" timestr="Wed Oct 15 11:46:56 2025"></finished><hosts up="1" down="255" total="256"></hosts></runstats></nmaprun>

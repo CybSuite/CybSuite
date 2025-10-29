@@ -16,7 +16,7 @@ class AllIngestor(BaseIngestor):
     def _get_plugin_instance(self, plugin_name: str):
         plugin_cls = pm_ingestors[plugin_name]
         plugin_instance = plugin_cls(self.cyberdb)
-        plugin_instance.network = self.network
+        plugin_instance.source_network = self.source_network
         return plugin_instance
 
     def do_run(self, filepath, allow_multiple_ingestion: bool = None):

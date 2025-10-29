@@ -26,6 +26,7 @@ fields:
     in_filter_query: true
     indexed: true
     description: "Control-specific validation data"
+  # TODO: fix severity, either keep default none or undefined, but not both
   severity:
     type: str
     default: null
